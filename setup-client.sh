@@ -5,7 +5,9 @@
 
 set -e
 
-PROJECT_DIR="/Users/will/Projects/Saults/slack-mentions-assistant"
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$SCRIPT_DIR"
 INSTALL_DIR="$HOME/scripts/slack-assistant"
 
 # Colors
@@ -103,30 +105,30 @@ fi
 echo ""
 
 # Update check-mentions-with-monitor.sh with paths
-cat > "$INSTALL_DIR/check-mentions-with-monitor.sh" <<'EOF'
+cat > "$INSTALL_DIR/check-mentions-with-monitor.sh" <<EOF
 #!/bin/bash
 
 # Wrapper for check-mentions-notify.py that uses monitoring project's venv
 # This provides access to httpx for reporting to the monitoring server
 
-PROJECT_DIR="/Users/will/Projects/Saults/slack-mentions-assistant"
+PROJECT_DIR="$PROJECT_DIR"
 
 # Check if virtual environment exists
-if [ ! -d "$PROJECT_DIR/venv" ]; then
-    echo "ERROR: Virtual environment not found at $PROJECT_DIR/venv"
-    echo "Run $PROJECT_DIR/setup.sh first"
+if [ ! -d "\$PROJECT_DIR/venv" ]; then
+    echo "ERROR: Virtual environment not found at \$PROJECT_DIR/venv"
+    echo "Run \$PROJECT_DIR/setup.sh first"
     exit 1
 fi
 
 # Activate virtual environment
-source "$PROJECT_DIR/venv/bin/activate"
+source "\$PROJECT_DIR/venv/bin/activate"
 
 # Set monitoring server URL from environment or use default
-export MONITOR_SERVER_URL="${MONITOR_SERVER_URL:-http://localhost:8000}"
-export CLIENT_ID="$(hostname)"
+export MONITOR_SERVER_URL="\${MONITOR_SERVER_URL:-http://localhost:8000}"
+export CLIENT_ID="\$(hostname)"
 
 # Run the Python script
-python3 "$HOME/scripts/slack-assistant/check-mentions-notify.py"
+python3 "\$HOME/scripts/slack-assistant/check-mentions-notify.py"
 
 # Deactivate when done
 deactivate
@@ -218,7 +220,7 @@ if curl -s "$SERVER_URL/health" >/dev/null 2>&1; then
 else
     echo -e "${RED}✗ Cannot reach server${NC}"
     echo "  Make sure the server is running on the main machine"
-    echo "  Run: cd $PROJECT_DIR && ./run.sh"
+    echo "  Run: ./run.sh (from the project directory)"
 fi
 
 echo ""

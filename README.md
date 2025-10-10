@@ -36,7 +36,8 @@ Centralized Slack mentions monitoring with real-time dashboard and multi-client 
 ### Server Setup (One Machine)
 
 ```bash
-cd /Users/will/Projects/Saults/slack-mentions-assistant
+# Clone or navigate to the project directory
+cd slack-mentions-assistant
 
 # One-time setup
 ./setup.sh
@@ -54,11 +55,17 @@ The dashboard will show:
 ### Client Setup (Any Machine)
 
 ```bash
-# Copy project to new machine
-scp -r /Users/will/Projects/Saults/slack-mentions-assistant user@newmachine:~/
+# Option 1: Clone from GitHub
+git clone https://github.com/wsaults/comms-assistant.git
+cd comms-assistant
+./setup-client.sh
 
-# On new machine
-cd ~/Projects/Saults/slack-mentions-assistant
+# Option 2: Copy via SCP (if not using GitHub)
+# On source machine:
+scp -r slack-mentions-assistant user@newmachine:~/
+
+# On new machine:
+cd ~/slack-mentions-assistant
 ./setup-client.sh
 ```
 
@@ -243,13 +250,16 @@ brew install ngrok
 
 ## Version Control
 
-This project is designed for git:
+This project is ready for version control:
 
 ```bash
-cd /Users/will/Projects/Saults/slack-mentions-assistant
-git init
+# Already initialized with git
+# Repository: https://github.com/wsaults/comms-assistant
+
+# To push changes:
 git add .
-git commit -m "Initial commit"
+git commit -m "Your commit message"
+git push origin main
 ```
 
 `.gitignore` excludes:
