@@ -58,7 +58,7 @@ The centralized server/dashboard runs on **one machine only**:
 
 ```bash
 # On the main monitoring machine
-cd /Users/will/Projects/Saults/slack-mentions-assistant
+cd slack-mentions-assistant  # or comms-assistant if cloned from GitHub
 ./setup.sh   # One-time setup
 ./run.sh     # Start server, ngrok, and dashboard
 ```
