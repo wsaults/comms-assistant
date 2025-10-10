@@ -136,6 +136,29 @@ except Exception as e:
         echo -e "${GREEN}✓ Found Team ID: $TEAM_ID${NC}"
     fi
 
+    # Create MCP config on this machine so check-mentions-notify.py can find it
+    echo ""
+    echo -e "${YELLOW}→ Creating MCP config...${NC}"
+    mkdir -p "$HOME/.claude"
+
+    cat > "$MCP_CONFIG" <<EOF
+{
+  "mcpServers": {
+    "slack": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-slack"],
+      "env": {
+        "SLACK_BOT_TOKEN": "$SLACK_TOKEN",
+        "SLACK_TEAM_ID": "$TEAM_ID"
+      }
+    }
+  }
+}
+EOF
+
+    chmod 600 "$MCP_CONFIG"
+    echo -e "${GREEN}✓ MCP config created at ~/.claude/mcp-servers.json${NC}"
+
     USE_MCP=false
 fi
 

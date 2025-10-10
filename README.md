@@ -174,10 +174,14 @@ Edit `~/.claude/mcp-servers.json` for Slack credentials (created by `setup.sh`):
 
 ### Client
 
-**Setup automatically detects Team ID:**
+**Setup automatically configures credentials:**
 - If you have MCP config (`~/.claude/mcp-servers.json`), it uses those credentials
-- Otherwise, enter your Slack token and Team ID is auto-detected via API
-- Fallback to manual entry if auto-detection fails
+- Otherwise:
+  1. You provide your Slack token (xoxp-...)
+  2. Team ID is auto-detected via Slack API
+  3. MCP config is created automatically on the client machine
+  4. Credentials are secured with 600 permissions
+- Fallback to manual Team ID entry if auto-detection fails
 
 LaunchD agent runs hourly from 8 AM - 7 PM. To customize:
 

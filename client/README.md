@@ -23,9 +23,11 @@ cd ~/scripts/slack-assistant
 ```
 
 The setup script will:
-- Install dependencies (slack-sdk, httpx)
-- Ask for the server URL (ngrok or local IP)
-- Optionally use Slack credentials from ~/.claude/mcp-servers.json
+- Install dependencies (slack-sdk, httpx, python-dotenv)
+- Ask for the server URL (ngrok URL from dashboard)
+- Configure Slack credentials:
+  - Uses existing `~/.claude/mcp-servers.json` if available
+  - Otherwise creates it with your token and auto-detected Team ID
 - Set up hourly automated checks (8 AM - 7 PM)
 
 ## Manual Testing
