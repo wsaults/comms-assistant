@@ -70,10 +70,10 @@ cd ~/slack-mentions-assistant
 ```
 
 Client setup will:
-1. Install dependencies
-2. Ask for server URL (ngrok or local IP)
-3. Configure Slack credentials (or use MCP)
-4. Set up hourly automated checks
+1. Install dependencies (slack-sdk, httpx, python-dotenv)
+2. Ask for server URL (ngrok URL from dashboard)
+3. Configure Slack credentials (auto-detects Team ID from token)
+4. Set up hourly automated checks (8 AM - 7 PM)
 
 ## Project Structure
 
@@ -173,6 +173,11 @@ Edit `~/.claude/mcp-servers.json` for Slack credentials (created by `setup.sh`):
 ```
 
 ### Client
+
+**Setup automatically detects Team ID:**
+- If you have MCP config (`~/.claude/mcp-servers.json`), it uses those credentials
+- Otherwise, enter your Slack token and Team ID is auto-detected via API
+- Fallback to manual entry if auto-detection fails
 
 LaunchD agent runs hourly from 8 AM - 7 PM. To customize:
 

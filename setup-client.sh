@@ -94,11 +94,48 @@ if [ -f "$MCP_CONFIG" ]; then
 else
     echo "No MCP configuration found."
     echo ""
-    echo "You need a Slack User Token (starts with xoxp-) and Team ID."
-    echo "See: https://api.slack.com/apps"
+    echo "You need a Slack User Token (starts with xoxp-)."
+    echo "Get one at: https://api.slack.com/apps"
     echo ""
     read -p "Enter your Slack User Token (xoxp-...): " SLACK_TOKEN
-    read -p "Enter your Slack Team ID (T...): " TEAM_ID
+
+    if [[ -z "$SLACK_TOKEN" ]]; then
+        echo -e "${RED}Error: Token is required${NC}"
+        exit 1
+    fi
+
+    # Auto-detect team ID from token
+    echo ""
+    echo -e "${YELLOW}→ Auto-detecting Slack Team ID...${NC}"
+
+    TEAM_ID=$(python3 -c "
+from slack_sdk import WebClient
+import sys
+
+try:
+    client = WebClient('$SLACK_TOKEN')
+    response = client.auth_test()
+    print(response.get('team_id'))
+except Exception as e:
+    print('ERROR', file=sys.stderr)
+    sys.exit(1)
+" 2>/dev/null)
+
+    if [[ -z "$TEAM_ID" ]] || [[ ! "$TEAM_ID" =~ ^T ]]; then
+        echo -e "${RED}✗ Failed to auto-detect Team ID${NC}"
+        echo "  Make sure slack-sdk is installed: pip3 install slack-sdk"
+        echo "  Or check that your token is valid"
+        echo ""
+        read -p "Enter your Slack Team ID manually (T...): " TEAM_ID
+
+        if [[ ! "$TEAM_ID" =~ ^T ]]; then
+            echo -e "${RED}Error: Team ID should start with 'T'${NC}"
+            exit 1
+        fi
+    else
+        echo -e "${GREEN}✓ Found Team ID: $TEAM_ID${NC}"
+    fi
+
     USE_MCP=false
 fi
 
