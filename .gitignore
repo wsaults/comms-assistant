@@ -45,3 +45,4 @@ nohup.out
 config.json
 *-state
 .slack-mentions-state
+.claude/settings.local.json
