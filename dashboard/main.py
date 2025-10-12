@@ -14,10 +14,11 @@ from datetime import datetime
 from typing import Dict, List
 
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Header, Footer, Static, DataTable, Label
+from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
+from textual.widgets import Header, Footer, Static, DataTable, Label, ListView, ListItem
 from textual.reactive import reactive
-from textual import work
+from textual import work, on
+from textual.message import Message
 import httpx
 import websockets
 from dotenv import load_dotenv
@@ -276,6 +277,205 @@ class ConnectionStatus(Static):
         return f"[{self.status_color}]● {self.status}[/{self.status_color}]"
 
 
+class PriorityAlertsWidget(Static):
+    """Widget displaying priority alerts - direct mentions, questions, high activity"""
+
+    mentions = reactive([])
+    stats = reactive({})
+
+    def render(self) -> str:
+        lines = ["[bold red]🚨 Priority Alerts[/bold red]\n"]
+
+        if not self.mentions:
+            lines.append("[dim]No priority alerts[/dim]")
+            return "\n".join(lines)
+
+        # Find direct mentions (contains @)
+        direct_mentions = []
+        questions = []
+        for mention in self.mentions:
+            text = mention.get("text", "")
+            # Check if it's a direct mention by looking for @ in the text
+            if "@" in text and not mention.get("responded"):
+                direct_mentions.append(mention)
+            elif mention.get("is_question") and not mention.get("responded"):
+                questions.append(mention)
+
+        # Show direct mentions first
+        if direct_mentions:
+            lines.append("[bold red on white]🔴 DIRECT MENTIONS[/bold red on white]")
+            for mention in direct_mentions[:3]:
+                try:
+                    timestamp = datetime.fromisoformat(mention["timestamp"]).strftime("%I:%M %p")
+                except:
+                    timestamp = "--:--"
+                channel = mention.get("channel", "?")[:15]
+                user = mention.get("user", "?")[:12]
+                text = mention.get("text", "")[:60]
+                lines.append(f"  [red]⚠[/red] {timestamp} | [cyan]{channel}[/cyan] | [yellow]{user}[/yellow]")
+                lines.append(f"    {text}")
+            lines.append("")
+
+        # Show unanswered questions
+        if questions:
+            lines.append("[bold yellow]❓ UNANSWERED QUESTIONS[/bold yellow]")
+            for mention in questions[:3]:
+                try:
+                    timestamp = datetime.fromisoformat(mention["timestamp"]).strftime("%I:%M %p")
+                except:
+                    timestamp = "--:--"
+                channel = mention.get("channel", "?")[:15]
+                user = mention.get("user", "?")[:12]
+                text = mention.get("text", "")[:60]
+                lines.append(f"  [yellow]?[/yellow] {timestamp} | [cyan]{channel}[/cyan] | [yellow]{user}[/yellow]")
+                lines.append(f"    {text}")
+            lines.append("")
+
+        # Show high-activity channels (>10 messages/hour)
+        high_activity_channels = []
+        for client_id, client_stats in self.stats.items():
+            last_hour = client_stats.get("messages_last_hour", 0)
+            if last_hour > 10:
+                channels = client_stats.get("active_channels", [])
+                for channel in channels:
+                    high_activity_channels.append((channel, last_hour, client_id))
+
+        if high_activity_channels:
+            lines.append("[bold yellow on black]⚡ HIGH ACTIVITY CHANNELS[/bold yellow on black]")
+            for channel, count, client_id in high_activity_channels[:3]:
+                client_display = client_id[:15] if len(client_id) <= 15 else client_id[:12] + "..."
+                lines.append(f"  [yellow]⚡[/yellow] [cyan]{channel}[/cyan] - {count} msgs/hr ([dim]{client_display}[/dim])")
+
+        if not direct_mentions and not questions and not high_activity_channels:
+            lines.append("[dim]All clear - no urgent items[/dim]")
+
+        return "\n".join(lines)
+
+
+class ChannelActivityWidget(Static):
+    """Widget displaying channel activity across all clients"""
+
+    mentions = reactive([])
+    stats = reactive({})
+
+    def render(self) -> str:
+        lines = ["[bold cyan]📺 Channel Activity[/bold cyan]\n"]
+
+        if not self.mentions:
+            lines.append("[dim]No channel activity yet...[/dim]")
+            return "\n".join(lines)
+
+        # Count messages per channel in last hour
+        from collections import defaultdict
+        channel_counts = defaultdict(int)
+        now = datetime.now()
+
+        for mention in self.mentions:
+            try:
+                timestamp = datetime.fromisoformat(mention["timestamp"])
+                hours_ago = (now - timestamp).total_seconds() / 3600
+                if hours_ago <= 1:
+                    channel = mention.get("channel", "unknown")
+                    channel_counts[channel] += 1
+            except:
+                continue
+
+        if not channel_counts:
+            lines.append("[dim]No recent channel activity[/dim]")
+            return "\n".join(lines)
+
+        # Sort by activity level
+        sorted_channels = sorted(channel_counts.items(), key=lambda x: x[1], reverse=True)
+
+        for channel, count in sorted_channels[:10]:
+            # Color code by activity level
+            if count > 10:
+                indicator = "[red]🔥[/red]"
+                bar = "[red]" + "█" * min(count, 20) + "[/red]"
+            elif count > 5:
+                indicator = "[yellow]⚡[/yellow]"
+                bar = "[yellow]" + "█" * min(count, 20) + "[/yellow]"
+            else:
+                indicator = "[green]•[/green]"
+                bar = "[green]" + "█" * count + "[/green]"
+
+            channel_display = channel[:20] if len(channel) <= 20 else channel[:17] + "..."
+            lines.append(f"{indicator} [cyan]{channel_display:<20}[/cyan] │ {bar} {count}")
+
+        return "\n".join(lines)
+
+
+class MessageDetailModal(Static):
+    """Modal for displaying full message details"""
+
+    message_data = reactive({})
+    visible = reactive(False)
+
+    def render(self) -> str:
+        if not self.visible or not self.message_data:
+            return ""
+
+        msg = self.message_data
+        try:
+            timestamp = datetime.fromisoformat(msg["timestamp"]).strftime("%I:%M %p on %b %d, %Y")
+        except:
+            timestamp = "Unknown time"
+
+        channel = msg.get("channel", "Unknown")
+        user = msg.get("user", "Unknown")
+        text = msg.get("text", "")
+        client_id = msg.get("client_id", "Unknown")
+        is_question = msg.get("is_question", False)
+        responded = msg.get("responded", False)
+
+        # Clean Slack mentions
+        import re
+        text = re.sub(r'<@[A-Z0-9]+\|([^>]+)>', r'\1', text)
+        text = re.sub(r'<@([A-Z0-9]+)>', r'@\1', text)
+
+        status = "✓ Responded" if responded else ("? Question" if is_question else "• Unread")
+        status_color = "green" if responded else ("yellow" if is_question else "white")
+
+        modal = f"""
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                        [bold white]MESSAGE DETAILS[/bold white]                                    ║
+╠════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                ║
+║  [bold cyan]Channel:[/bold cyan]   {channel:<65} ║
+║  [bold yellow]From:[/bold yellow]      {user:<65} ║
+║  [bold white]Time:[/bold white]      {timestamp:<65} ║
+║  [bold magenta]Client:[/bold magenta]    {client_id[:65]:<65} ║
+║  [bold {status_color}]Status:[/bold {status_color}]    {status:<65} ║
+║                                                                                ║
+╠════════════════════════════════════════════════════════════════════════════════╣
+║  [bold white]MESSAGE:[/bold white]                                                                 ║
+║                                                                                ║
+"""
+
+        # Word wrap the message text to fit within modal
+        words = text.split()
+        lines = []
+        current_line = ""
+        for word in words:
+            if len(current_line) + len(word) + 1 <= 75:
+                current_line += word + " "
+            else:
+                lines.append(current_line.strip())
+                current_line = word + " "
+        if current_line:
+            lines.append(current_line.strip())
+
+        for line in lines[:15]:  # Show up to 15 lines
+            modal += f"║  {line:<78} ║\n"
+
+        modal += """║                                                                                ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+                    [bold white]Press [cyan]ESC[/cyan] to close[/bold white]
+"""
+        return modal
+
+
 class SlackMonitorApp(App):
     """Textual application for Slack monitoring"""
 
@@ -296,37 +496,53 @@ class SlackMonitorApp(App):
     }
 
     #left-panel {
-        width: 35;
+        width: 30%;
         height: 1fr;
         layout: vertical;
     }
 
     #right-panel {
-        width: 1fr;
+        width: 70%;
         height: 1fr;
         layout: vertical;
     }
 
     #stats-widget {
-        height: 16;
+        height: 14;
         border: solid cyan;
         padding: 1;
+        margin: 0 0 1 0;
     }
 
     #clients-panel {
-        height: 1fr;
+        height: 12;
         border: solid cyan;
         padding: 1;
+        margin: 0 0 1 0;
+    }
+
+    #channel-activity-widget {
+        height: 1fr;
+        border: solid blue;
+        padding: 1;
+    }
+
+    #priority-alerts-widget {
+        height: 18;
+        border: solid red;
+        padding: 1;
+        margin: 0 0 1 0;
     }
 
     #mentions-table {
-        height: 2fr;
+        height: 1fr;
         border: solid magenta;
         padding: 1;
+        margin: 0 0 1 0;
     }
 
     #chart-widget {
-        height: 1fr;
+        height: 20;
         border: solid green;
         padding: 1;
     }
@@ -336,11 +552,32 @@ class SlackMonitorApp(App):
         background: $panel;
         padding: 0 1;
     }
+
+    #message-detail-modal {
+        layer: overlay;
+        align: center middle;
+        width: 82;
+        height: auto;
+        background: $panel;
+        border: thick white;
+        padding: 0;
+    }
+
+    .pulsate {
+        border: heavy red;
+        text-style: bold;
+    }
+
+    .high-activity {
+        background: #3a3a00;
+    }
     """
 
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("r", "refresh", "Refresh"),
+        ("enter", "show_first_mention", "View Detail"),
+        ("escape", "close_modal", "Close"),
     ]
 
     def __init__(self):
@@ -351,6 +588,7 @@ class SlackMonitorApp(App):
             "messages_per_hour": {},
             "active_clients": []
         }
+        self.modal_visible = False
 
     def compose(self) -> ComposeResult:
         """Create child widgets"""
@@ -360,14 +598,17 @@ class SlackMonitorApp(App):
             with Vertical(id="left-panel"):
                 yield StatsWidget(id="stats-widget")
                 yield ClientsPanel(id="clients-panel")
+                yield ChannelActivityWidget(id="channel-activity-widget")
 
             with Vertical(id="right-panel"):
+                yield PriorityAlertsWidget(id="priority-alerts-widget")
                 yield MentionsTable(id="mentions-table")
                 yield MentionsLineGraph(id="chart-widget")
 
         with Container(id="status-bar"):
             yield ConnectionStatus()
 
+        yield MessageDetailModal(id="message-detail-modal")
         yield Footer()
 
     async def on_mount(self) -> None:
@@ -488,9 +729,19 @@ class SlackMonitorApp(App):
         if ngrok_url:
             stats_widget.ngrok_url = ngrok_url
 
+        # Update priority alerts widget
+        priority_widget = self.query_one(PriorityAlertsWidget)
+        priority_widget.mentions = self.data["mentions"]
+        priority_widget.stats = self.data["stats"]
+
         # Update mentions table
         mentions_widget = self.query_one(MentionsTable)
         mentions_widget.mentions = self.data["mentions"]
+
+        # Update channel activity widget
+        channel_widget = self.query_one(ChannelActivityWidget)
+        channel_widget.mentions = self.data["mentions"]
+        channel_widget.stats = self.data["stats"]
 
         # Update chart
         chart_widget = self.query_one(MentionsLineGraph)
@@ -503,6 +754,34 @@ class SlackMonitorApp(App):
     def action_refresh(self) -> None:
         """Refresh data"""
         self.fetch_initial_data()
+
+    def action_show_first_mention(self) -> None:
+        """Show details of the most recent unread mention"""
+        if not self.data["mentions"]:
+            return
+
+        # Find first unread mention
+        unread = [m for m in self.data["mentions"] if not m.get("responded")]
+        if unread:
+            # Sort by timestamp, most recent first
+            sorted_unread = sorted(unread, key=lambda x: x.get("timestamp", ""), reverse=True)
+            mention = sorted_unread[0]
+        else:
+            # If no unread, show most recent mention
+            sorted_mentions = sorted(self.data["mentions"], key=lambda x: x.get("timestamp", ""), reverse=True)
+            mention = sorted_mentions[0]
+
+        modal = self.query_one(MessageDetailModal)
+        modal.message_data = mention
+        modal.visible = True
+        self.modal_visible = True
+
+    def action_close_modal(self) -> None:
+        """Close the message detail modal"""
+        if self.modal_visible:
+            modal = self.query_one(MessageDetailModal)
+            modal.visible = False
+            self.modal_visible = False
 
     def action_quit(self) -> None:
         """Quit the app"""

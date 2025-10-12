@@ -7,13 +7,17 @@ Run with:
     uvicorn server.main:app --host 0.0.0.0 --port 8000 --reload
 """
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import asyncio
 from collections import defaultdict, deque
+
+# Import database and mock data modules
+from server import database as db
+from server import mock_data
 
 app = FastAPI(
     title="Slack Monitor Server",
@@ -169,9 +173,13 @@ async def health():
     return {"status": "healthy"}
 
 @app.post("/api/mention")
-async def report_mention(mention: Mention):
+async def report_mention(mention: Mention, background_tasks: BackgroundTasks):
     """Receive mention from client"""
+    # Add to in-memory store for real-time updates
     store.add_mention(mention)
+
+    # Save to database in background
+    background_tasks.add_task(save_mention_to_db, mention)
 
     # Broadcast to dashboards
     await manager.broadcast({
@@ -180,6 +188,24 @@ async def report_mention(mention: Mention):
     })
 
     return {"status": "received", "mention_id": mention.timestamp}
+
+
+def save_mention_to_db(mention: Mention):
+    """Background task to save mention to database"""
+    session = db.get_db()
+    try:
+        db.add_mention(
+            session,
+            timestamp=datetime.fromisoformat(mention.timestamp),
+            channel=mention.channel,
+            user=mention.user,
+            text=mention.text,
+            is_question=mention.is_question,
+            responded=mention.responded,
+            client_id=mention.client_id
+        )
+    finally:
+        session.close()
 
 @app.post("/api/conversation")
 async def report_conversation(conv: ConversationSummary):
@@ -194,9 +220,12 @@ async def report_conversation(conv: ConversationSummary):
     return {"status": "received"}
 
 @app.post("/api/stats")
-async def report_stats(stats: Stats):
+async def report_stats(stats: Stats, background_tasks: BackgroundTasks):
     """Receive stats update from client"""
     store.update_stats(stats)
+
+    # Update client in database
+    background_tasks.add_task(save_client_to_db, stats.client_id)
 
     await manager.broadcast({
         "type": "stats_update",
@@ -204,6 +233,15 @@ async def report_stats(stats: Stats):
     })
 
     return {"status": "received"}
+
+
+def save_client_to_db(client_id: str):
+    """Background task to update client in database"""
+    session = db.get_db()
+    try:
+        db.update_client(session, client_id=client_id)
+    finally:
+        session.close()
 
 @app.get("/api/mentions")
 async def get_mentions(hours: int = 24, client_id: Optional[str] = None):
@@ -261,6 +299,148 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         print(f"WebSocket error: {e}")
         manager.disconnect(websocket)
+
+# =============================================================================
+# DEBUG / DEVELOPMENT ENDPOINTS
+# =============================================================================
+
+@app.post("/api/debug/seed")
+async def seed_mock_data(scenario: str = "default"):
+    """
+    Seed database with mock data for testing
+    Scenarios: default, high_activity, multi_job
+    """
+    # Get mock data
+    mock_dataset = mock_data.get_mock_scenario(scenario)
+
+    session = db.get_db()
+    try:
+        # Add mentions to database
+        for mention in mock_dataset.get("mentions", []):
+            db.add_mention(
+                session,
+                timestamp=datetime.fromisoformat(mention.timestamp),
+                channel=mention.channel,
+                user=mention.user,
+                text=mention.text,
+                is_question=mention.is_question,
+                responded=mention.responded,
+                client_id=mention.client_id
+            )
+            # Also add to in-memory store
+            store.add_mention(Mention(**mention.dict()))
+
+        # Add stats
+        for stat in mock_dataset.get("stats", []):
+            store.update_stats(Stats(**stat.dict()))
+            db.update_client(session, client_id=stat.client_id)
+
+        # Add channel activity if present
+        for activity in mock_dataset.get("channel_activity", []):
+            db.add_channel_activity(
+                session,
+                channel=activity["channel"],
+                message_count=activity["message_count"],
+                hour=activity["hour"],
+                date=activity["date"],
+                client_id=activity["client_id"]
+            )
+
+        # Broadcast update to dashboards
+        await manager.broadcast({
+            "type": "data_seeded",
+            "data": {
+                "scenario": scenario,
+                "mentions_added": len(mock_dataset.get("mentions", [])),
+                "stats_added": len(mock_dataset.get("stats", []))
+            }
+        })
+
+        return {
+            "status": "success",
+            "scenario": scenario,
+            "mentions_added": len(mock_dataset.get("mentions", [])),
+            "stats_added": len(mock_dataset.get("stats", [])),
+            "message": f"Mock data loaded. Refresh dashboard to see changes."
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+    finally:
+        session.close()
+
+
+@app.delete("/api/debug/clear")
+async def clear_all_data():
+    """Clear all data from in-memory store and database"""
+    # Clear in-memory
+    store.mentions.clear()
+    store.stats.clear()
+    store.connected_clients.clear()
+
+    # Clear database (keep last 0 days = delete all)
+    session = db.get_db()
+    try:
+        result = db.cleanup_old_data(session, days=0)
+        return {
+            "status": "success",
+            "cleared": result
+        }
+    finally:
+        session.close()
+
+
+@app.get("/api/debug/stats")
+async def get_debug_stats():
+    """Get database statistics"""
+    session = db.get_db()
+    try:
+        stats = db.get_stats(session)
+        return stats
+    finally:
+        session.close()
+
+
+# =============================================================================
+# STARTUP / SHUTDOWN EVENTS
+# =============================================================================
+
+@app.on_event("startup")
+async def startup_event():
+    """Load recent data from database on startup"""
+    print("🚀 Starting Slack Monitor Server...")
+    print(f"📂 Database: {db.DB_FILE}")
+
+    # Load recent mentions from database to in-memory store
+    session = db.get_db()
+    try:
+        recent_mentions = db.get_recent_mentions(session, hours=24, limit=100)
+        for db_mention in recent_mentions:
+            mention = Mention(
+                timestamp=db_mention.timestamp.isoformat(),
+                channel=db_mention.channel,
+                user=db_mention.user,
+                text=db_mention.text,
+                is_question=db_mention.is_question,
+                responded=db_mention.responded,
+                client_id=db_mention.client_id
+            )
+            store.mentions.append(mention)
+
+        print(f"✓ Loaded {len(recent_mentions)} recent mentions from database")
+
+        # Load active clients
+        active_clients = db.get_active_clients(session)
+        for client in active_clients:
+            store.connected_clients[client.client_id] = client.last_seen
+
+        print(f"✓ Loaded {len(active_clients)} active clients")
+        print("✓ Server ready!")
+    finally:
+        session.close()
+
 
 if __name__ == "__main__":
     import uvicorn
