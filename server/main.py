@@ -305,16 +305,29 @@ async def websocket_endpoint(websocket: WebSocket):
 # =============================================================================
 
 @app.post("/api/debug/seed")
-async def seed_mock_data(scenario: str = "default"):
+async def seed_mock_data(scenario: str = "default", clear_old: bool = True):
     """
-    Seed database with mock data for testing
-    Scenarios: default, high_activity, multi_job
-    """
-    # Get mock data
-    mock_dataset = mock_data.get_mock_scenario(scenario)
+    Seed database with mock data for testing - ALL DATA FROM TODAY
 
+    Scenarios: default, high_activity, multi_job
+    Args:
+        scenario: Which mock scenario to load
+        clear_old: Clear old data before seeding (default: True)
+    """
     session = db.get_db()
     try:
+        # Clear old data if requested
+        if clear_old:
+            print("Clearing old data...")
+            store.mentions.clear()
+            store.stats.clear()
+            db.cleanup_old_data(session, days=0)  # Clear all
+            print("✓ Old data cleared")
+
+        # Get fresh mock data (all from today)
+        print(f"Generating mock data for scenario: {scenario}")
+        mock_dataset = mock_data.get_mock_scenario(scenario)
+        print(f"✓ Generated {len(mock_dataset.get('mentions', []))} mentions from today")
         # Add mentions to database
         for mention in mock_dataset.get("mentions", []):
             db.add_mention(
@@ -356,12 +369,14 @@ async def seed_mock_data(scenario: str = "default"):
             }
         })
 
+        today = datetime.now().strftime("%Y-%m-%d")
         return {
             "status": "success",
             "scenario": scenario,
+            "date": today,
             "mentions_added": len(mock_dataset.get("mentions", [])),
             "stats_added": len(mock_dataset.get("stats", [])),
-            "message": f"Mock data loaded. Refresh dashboard to see changes."
+            "message": f"Mock data from {today} loaded. Refresh dashboard to see changes."
         }
     except Exception as e:
         return {

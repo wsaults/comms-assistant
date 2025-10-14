@@ -2,11 +2,22 @@
 
 # Slack Monitor - Unified Launcher
 # Starts server, ngrok, and dashboard in one command
+#
+# Usage:
+#   ./run.sh              # Start normally
+#   ./run.sh --mock       # Start and seed with mock data from today
+#   ./run.sh --seed       # Same as --mock
 
 set -e
 
 PROJECT_DIR="/Users/will/Projects/Saults/slack-mentions-assistant"
 cd "$PROJECT_DIR"
+
+# Parse arguments
+SEED_MOCK=false
+if [[ "$1" == "--mock" ]] || [[ "$1" == "--seed" ]]; then
+    SEED_MOCK=true
+fi
 
 # Colors
 GREEN='\033[0;32m'
@@ -19,6 +30,11 @@ echo -e "${BLUE}╔════════════════════�
 echo -e "${BLUE}║           Slack Monitor - Starting Everything               ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
+
+if [ "$SEED_MOCK" = true ]; then
+    echo -e "${YELLOW}📊 Mock data mode enabled - will seed data from today${NC}"
+    echo ""
+fi
 
 # Check if virtual environment exists
 if [ ! -d "venv" ]; then
@@ -34,18 +50,12 @@ source venv/bin/activate
 # START SERVER
 # ============================================================================
 
-# Check if server is already running
+# Check if server is already running and automatically restart it
 if lsof -Pi :8000 -sTCP:LISTEN -t >/dev/null 2>&1; then
-    echo -e "${YELLOW}⚠ Server already running on port 8000${NC}"
-    read -p "  Kill existing server and restart? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo -e "${YELLOW}→ Stopping existing server...${NC}"
-        lsof -ti:8000 | xargs kill -9 2>/dev/null || true
-        sleep 2
-    else
-        echo -e "${GREEN}✓ Using existing server${NC}"
-    fi
+    echo -e "${YELLOW}→ Server already running - restarting...${NC}"
+    lsof -ti:8000 | xargs kill -9 2>/dev/null || true
+    sleep 2
+    echo -e "${GREEN}✓ Existing server stopped${NC}"
 fi
 
 # Start server in background if not running
@@ -85,6 +95,31 @@ fi
 SERVER_STATUS=$(curl -s http://localhost:8000/ | python3 -c "import sys, json; data=json.load(sys.stdin); print(f'Clients: {len(data[\"active_clients\"])}, Mentions: {data[\"total_mentions\"]}')" 2>/dev/null || echo "Status unavailable")
 echo "  $SERVER_STATUS"
 echo ""
+
+# ============================================================================
+# SEED MOCK DATA (if requested)
+# ============================================================================
+
+if [ "$SEED_MOCK" = true ]; then
+    echo -e "${YELLOW}→ Seeding mock data from today...${NC}"
+
+    SEED_RESPONSE=$(curl -s -X POST "http://localhost:8000/api/debug/seed?scenario=default&clear_old=true")
+
+    # Parse response
+    STATUS=$(echo "$SEED_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('status', 'unknown'))" 2>/dev/null)
+    MENTIONS=$(echo "$SEED_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('mentions_added', 0))" 2>/dev/null)
+    DATE=$(echo "$SEED_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('date', 'unknown'))" 2>/dev/null)
+
+    if [ "$STATUS" = "success" ]; then
+        echo -e "${GREEN}✓ Mock data seeded${NC}"
+        echo "  Date: $DATE"
+        echo "  Mentions: $MENTIONS"
+    else
+        echo -e "${RED}✗ Failed to seed mock data${NC}"
+        echo "  Response: $SEED_RESPONSE"
+    fi
+    echo ""
+fi
 
 # ============================================================================
 # START NGROK

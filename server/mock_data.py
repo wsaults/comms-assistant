@@ -116,16 +116,16 @@ class MockStats(BaseModel):
 
 def generate_mock_mentions(
     num_mentions: int = 50,
-    hours_spread: int = 24,
+    hours_spread: int = 12,
     clients: List[str] = None,
     channels: List[str] = None
 ) -> List[MockMention]:
     """
-    Generate realistic mock mentions
+    Generate realistic mock mentions for TODAY
 
     Args:
         num_mentions: Number of mentions to generate
-        hours_spread: Spread mentions across this many hours
+        hours_spread: Spread mentions across this many hours (default 12 for today)
         clients: List of client IDs (default: use MOCK_CLIENTS)
         channels: List of channels (default: use MOCK_CHANNELS)
     """
@@ -137,10 +137,24 @@ def generate_mock_mentions(
     mentions = []
     now = datetime.now()
 
+    # Calculate work hours range (8am to current time, or 8am-8pm if after 8pm)
+    work_start = now.replace(hour=8, minute=0, second=0, microsecond=0)
+    work_end = now.replace(hour=20, minute=0, second=0, microsecond=0)
+
+    # If we're before 8am, no data should be generated for today yet
+    if now.hour < 8:
+        return mentions
+
+    # If we're past 8pm, use 8pm as the end time, otherwise use current time
+    effective_end = min(now, work_end)
+
+    # Calculate the time range in seconds
+    time_range_seconds = (effective_end - work_start).total_seconds()
+
     for i in range(num_mentions):
-        # Spread timestamps across the hours
-        hours_ago = random.uniform(0, hours_spread)
-        timestamp = now - timedelta(hours=hours_ago)
+        # Generate random timestamp between 8am and current time (or 8pm)
+        random_seconds = random.uniform(0, time_range_seconds)
+        timestamp = work_start + timedelta(seconds=random_seconds)
 
         # Pick random elements
         client = random.choice(clients)
@@ -163,8 +177,9 @@ def generate_mock_mentions(
         if random.random() < 0.2:  # 20% chance of longer message
             text += f" We should also consider {random.choice(TOPICS)}."
 
-        # 60% chance of being responded to if not recent
-        if hours_ago > 2:
+        # 60% chance of being responded to if not recent (older than 2 hours)
+        hours_old = (now - timestamp).total_seconds() / 3600
+        if hours_old > 2:
             responded = random.random() < 0.6
         else:
             responded = False  # Recent messages likely unread
@@ -211,11 +226,11 @@ def generate_mock_stats(clients: List[str] = None) -> List[MockStats]:
 
 
 def generate_mock_channel_activity(
-    hours: int = 12,
+    hours: int = 13,  # 8am-8pm = 13 hours
     clients: List[str] = None,
     channels: List[str] = None
 ) -> List[Dict]:
-    """Generate mock channel activity for graphs"""
+    """Generate mock channel activity for graphs - TODAY ONLY (8am-8pm work hours)"""
     if clients is None:
         clients = MOCK_CLIENTS[:3]
     if channels is None:
@@ -223,20 +238,29 @@ def generate_mock_channel_activity(
 
     activity = []
     now = datetime.now()
+    today = now.strftime("%Y-%m-%d")
+    current_hour = now.hour
+
+    # Generate activity for work hours (8am-8pm)
+    work_start = 8
+    work_end = 20
 
     # Generate hourly activity for each client and channel
     for client in clients:
-        for hour_offset in range(hours):
-            timestamp = now - timedelta(hours=hour_offset)
-            hour = timestamp.hour
-            date = timestamp.strftime("%Y-%m-%d")
+        for hour in range(work_start, work_end + 1):
+            # Only generate data for hours that have passed today
+            if hour > current_hour:
+                continue
 
             # Each channel has different activity patterns
             for channel in channels:
                 # Simulate realistic activity patterns
-                # Work hours (9-5) have more activity
-                if 9 <= hour <= 17:
-                    base_count = random.randint(5, 20)
+                # Peak hours (10am-4pm) have more activity
+                if 10 <= hour <= 16:
+                    base_count = random.randint(8, 25)
+                elif 8 <= hour <= 9 or 17 <= hour <= 20:
+                    # Morning ramp-up and evening wind-down
+                    base_count = random.randint(3, 12)
                 else:
                     base_count = random.randint(0, 5)
 
@@ -248,7 +272,7 @@ def generate_mock_channel_activity(
                     "channel": channel,
                     "message_count": base_count,
                     "hour": hour,
-                    "date": date,
+                    "date": today,  # Always use today's date
                     "client_id": client
                 })
 
@@ -256,14 +280,14 @@ def generate_mock_channel_activity(
 
 
 def generate_high_activity_scenario() -> Dict:
-    """Generate a high-activity scenario for testing alerts"""
+    """Generate a high-activity scenario for testing alerts - TODAY ONLY"""
     clients = MOCK_CLIENTS[:2]
     mentions = []
     now = datetime.now()
 
-    # Generate burst of activity in last hour
+    # Generate burst of activity in last 2 hours (to ensure we're in today)
     for i in range(30):
-        minutes_ago = random.randint(0, 60)
+        minutes_ago = random.randint(0, 120)
         timestamp = now - timedelta(minutes=minutes_ago)
 
         # Mostly direct mentions and questions
@@ -345,9 +369,12 @@ def generate_multi_job_scenario() -> Dict:
         else:
             num_mentions = random.randint(1, 5)
 
-        # Generate mentions for this workspace
+        # Generate mentions for this workspace (keep within today)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        max_hours = (now - today_start).total_seconds() / 3600
+
         for i in range(num_mentions):
-            hours_ago = random.uniform(0, 8)  # Last 8 hours
+            hours_ago = random.uniform(0, min(8, max_hours))  # Last 8 hours or less if early morning
             timestamp = now - timedelta(hours=hours_ago)
 
             mention = MockMention(
@@ -383,17 +410,17 @@ def generate_multi_job_scenario() -> Dict:
 
 # Quick access functions
 def get_default_mock_data() -> Dict:
-    """Get default mock data set"""
+    """Get default mock data set - ALL DATA FROM TODAY (8am-8pm work hours)"""
     return {
-        "mentions": generate_mock_mentions(num_mentions=50, hours_spread=24),
+        "mentions": generate_mock_mentions(num_mentions=50, hours_spread=12),
         "stats": generate_mock_stats(),
-        "channel_activity": generate_mock_channel_activity(),
+        "channel_activity": generate_mock_channel_activity(hours=13),  # 8am-8pm = 13 hours
         "scenario": "default"
     }
 
 
 def get_mock_scenario(scenario: str = "default") -> Dict:
-    """Get specific mock scenario"""
+    """Get specific mock scenario - ALL DATA FROM TODAY"""
     scenarios = {
         "default": get_default_mock_data,
         "high_activity": generate_high_activity_scenario,
@@ -404,3 +431,13 @@ def get_mock_scenario(scenario: str = "default") -> Dict:
         return scenarios[scenario]()
     else:
         return get_default_mock_data()
+
+
+def is_data_from_today(timestamp_str: str) -> bool:
+    """Check if a timestamp string is from today"""
+    try:
+        timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+        today = datetime.now().date()
+        return timestamp.date() == today
+    except:
+        return False

@@ -18,10 +18,10 @@ RED='\033[0;31m'
 NC='\033[0m'
 
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║         Slack Monitor - Client Setup                        ║${NC}"
+echo -e "${BLUE}║      Mentions Assistant - Client Setup                      ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo "This will set up this machine to report Slack mentions to"
+echo "This will set up this machine to report mentions to"
 echo "your centralized monitoring dashboard."
 echo ""
 
@@ -33,29 +33,98 @@ fi
 
 PYTHON_VERSION=$(python3 --version | cut -d' ' -f2 | cut -d'.' -f1,2)
 echo -e "${GREEN}✓ Python $PYTHON_VERSION found${NC}"
+
+# Check Node.js (needed for Teams MCP)
+if command -v node &> /dev/null; then
+    NODE_VERSION=$(node --version)
+    echo -e "${GREEN}✓ Node.js $NODE_VERSION found${NC}"
+    HAS_NODE=true
+else
+    echo -e "${YELLOW}⚠ Node.js not found (required for Teams support)${NC}"
+    HAS_NODE=false
+fi
+
+# Check jq (needed for JSON manipulation)
+if ! command -v jq &> /dev/null; then
+    echo -e "${YELLOW}⚠ jq not found - installing...${NC}"
+    if command -v brew &> /dev/null; then
+        brew install jq
+    else
+        echo -e "${RED}✗ Could not install jq automatically${NC}"
+        echo "  Install it manually: brew install jq"
+        exit 1
+    fi
+fi
+
+echo ""
+
+# Platform Selection
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${BLUE}Platform Selection${NC}"
+echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo ""
+echo "Which messaging platforms do you want to monitor?"
+echo ""
+echo "  1) Slack only"
+echo "  2) Teams only"
+if [ "$HAS_NODE" = true ]; then
+    echo "  3) Both Slack and Teams"
+else
+    echo "  3) Both Slack and Teams (requires Node.js - not available)"
+fi
+echo ""
+read -p "Enter your choice (1-3): " PLATFORM_CHOICE
+
+case $PLATFORM_CHOICE in
+    1)
+        PLATFORMS=("slack")
+        echo -e "${GREEN}✓ Will monitor: Slack${NC}"
+        ;;
+    2)
+        if [ "$HAS_NODE" = false ]; then
+            echo -e "${RED}✗ Teams requires Node.js. Please install Node.js first.${NC}"
+            exit 1
+        fi
+        PLATFORMS=("teams")
+        echo -e "${GREEN}✓ Will monitor: Teams${NC}"
+        ;;
+    3)
+        if [ "$HAS_NODE" = false ]; then
+            echo -e "${RED}✗ Teams requires Node.js. Please install Node.js first.${NC}"
+            exit 1
+        fi
+        PLATFORMS=("slack" "teams")
+        echo -e "${GREEN}✓ Will monitor: Slack and Teams${NC}"
+        ;;
+    *)
+        echo -e "${RED}Invalid choice${NC}"
+        exit 1
+        ;;
+esac
 echo ""
 
 # Create installation directory
 echo -e "${YELLOW}→ Creating installation directory...${NC}"
 mkdir -p "$INSTALL_DIR"
 
-# Copy client files from project
+# Copy client files from project (copy all scripts)
 echo -e "${YELLOW}→ Copying client files...${NC}"
-cp "$PROJECT_DIR/client/check-mentions-notify.py" "$INSTALL_DIR/"
-cp "$PROJECT_DIR/client/check-mentions-with-monitor.sh" "$INSTALL_DIR/"
-cp "$PROJECT_DIR/client/find-team-id.py" "$INSTALL_DIR/"
-cp "$PROJECT_DIR/client/README.md" "$INSTALL_DIR/"
+for file in "$PROJECT_DIR"/scripts/slack-assistant/*.py "$PROJECT_DIR"/scripts/slack-assistant/*.sh; do
+    if [ -f "$file" ]; then
+        cp "$file" "$INSTALL_DIR/"
+    fi
+done
 
-chmod +x "$INSTALL_DIR"/*.{py,sh}
+chmod +x "$INSTALL_DIR"/*.py "$INSTALL_DIR"/*.sh 2>/dev/null || true
 
 echo -e "${GREEN}✓ Files copied to $INSTALL_DIR${NC}"
 echo ""
 
 # Install dependencies
 echo -e "${YELLOW}→ Installing dependencies...${NC}"
-pip3 install --break-system-packages slack-sdk httpx python-dotenv 2>/dev/null || {
+pip3 install --break-system-packages mcp slack-sdk httpx python-dotenv 2>/dev/null || {
     echo -e "${YELLOW}  Trying without --break-system-packages...${NC}"
-    pip3 install slack-sdk httpx python-dotenv
+    pip3 install mcp slack-sdk httpx python-dotenv
 }
 echo -e "${GREEN}✓ Dependencies installed${NC}"
 echo ""
@@ -78,19 +147,20 @@ if [[ ! $SERVER_URL =~ ^https?:// ]]; then
     exit 1
 fi
 
-# Get Slack credentials (optional - can use MCP config)
-echo ""
-echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${BLUE}Slack Credentials${NC}"
-echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
+# Configure Slack if selected
+if [[ " ${PLATFORMS[@]} " =~ " slack " ]]; then
+    echo ""
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}Slack Credentials${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
 
-# Check if MCP config exists
-MCP_CONFIG="$HOME/.claude/mcp-servers.json"
-if [ -f "$MCP_CONFIG" ]; then
-    echo -e "${GREEN}✓ Found existing MCP Slack configuration${NC}"
-    echo "  Using credentials from ~/.claude/mcp-servers.json"
-    USE_MCP=true
+    # Check if MCP config exists
+    MCP_CONFIG="$HOME/.claude/mcp-servers.json"
+    if [ -f "$MCP_CONFIG" ] && grep -q "slack" "$MCP_CONFIG"; then
+        echo -e "${GREEN}✓ Found existing MCP Slack configuration${NC}"
+        echo "  Using credentials from ~/.claude/mcp-servers.json"
+        SLACK_CONFIGURED=true
 else
     echo "No MCP configuration found."
     echo ""
@@ -156,45 +226,157 @@ except Exception as e:
 }
 EOF
 
-    chmod 600 "$MCP_CONFIG"
-    echo -e "${GREEN}✓ MCP config created at ~/.claude/mcp-servers.json${NC}"
+        chmod 600 "$MCP_CONFIG"
+        echo -e "${GREEN}✓ MCP config created at ~/.claude/mcp-servers.json${NC}"
 
-    USE_MCP=false
+        SLACK_CONFIGURED=true
+    fi
 fi
+
+# Configure Teams if selected
+if [[ " ${PLATFORMS[@]} " =~ " teams " ]]; then
+    echo ""
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}Teams Configuration${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
+
+    # Check if Teams MCP is already configured
+    if [ -f "$MCP_CONFIG" ] && grep -q "teams-mcp" "$MCP_CONFIG"; then
+        echo -e "${GREEN}✓ Found existing Teams MCP configuration${NC}"
+        TEAMS_CONFIGURED=true
+    else
+        echo "Setting up Microsoft Teams integration..."
+        echo ""
+        echo "This will:"
+        echo "  1. Install the Teams MCP server"
+        echo "  2. Run OAuth authentication (opens browser)"
+        echo "  3. Add Teams to your MCP configuration"
+        echo ""
+        read -p "Continue with Teams setup? (y/n) " -n 1 -r
+        echo
+        echo
+
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo -e "${YELLOW}→ Installing Teams MCP server...${NC}"
+
+            # Authenticate Teams MCP
+            echo ""
+            echo "Follow the prompts to authenticate with Microsoft Teams."
+            echo "This will open your browser for OAuth authentication."
+            echo ""
+
+            npx @floriscornel/teams-mcp@latest authenticate
+
+            if [ $? -eq 0 ]; then
+                echo -e "${GREEN}✓ Teams authentication successful${NC}"
+
+                # Update MCP config to add Teams
+                mkdir -p "$HOME/.claude"
+
+                if [ -f "$MCP_CONFIG" ]; then
+                    # Merge with existing config
+                    echo -e "${YELLOW}→ Updating MCP configuration...${NC}"
+
+                    # Create temporary Python script to merge JSON
+                    python3 <<EOF
+import json
+import sys
+
+try:
+                    with open("$MCP_CONFIG", "r") as f:
+                        config = json.load(f)
+except:
+                    config = {"mcpServers": {}}
+
+if "mcpServers" not in config:
+                    config["mcpServers"] = {}
+
+config["mcpServers"]["teams-mcp"] = {
+                    "command": "npx",
+                    "args": ["-y", "@floriscornel/teams-mcp@latest"]
+}
+
+with open("$MCP_CONFIG", "w") as f:
+                    json.dump(config, f, indent=2)
+
+print("Configuration updated")
+EOF
+                else
+                    # Create new config
+                    cat > "$MCP_CONFIG" <<EOF
+{
+  "mcpServers": {
+    "teams-mcp": {
+      "command": "npx",
+      "args": ["-y", "@floriscornel/teams-mcp@latest"]
+    }
+  }
+}
+EOF
+                fi
+
+                chmod 600 "$MCP_CONFIG"
+                echo -e "${GREEN}✓ Teams MCP added to configuration${NC}"
+                TEAMS_CONFIGURED=true
+            else
+                echo -e "${RED}✗ Teams authentication failed${NC}"
+                echo "  You can retry later by running:"
+                echo "  npx @floriscornel/teams-mcp@latest authenticate"
+                TEAMS_CONFIGURED=false
+            fi
+        else
+            echo -e "${YELLOW}⚠ Skipped Teams setup${NC}"
+            TEAMS_CONFIGURED=false
+        fi
+    fi
+fi
+
+# Create configuration file
+echo ""
+echo -e "${YELLOW}→ Creating configuration file...${NC}"
+
+# Convert bash array to JSON array
+PLATFORMS_JSON=$(printf '%s\n' "${PLATFORMS[@]}" | jq -R . | jq -s .)
+
+cat > "$HOME/.mentions-assistant-config" <<EOF
+{
+  "platforms": $PLATFORMS_JSON,
+  "monitor_server_url": "$SERVER_URL",
+  "client_id": "$(hostname)",
+  "check_interval_hours": 1
+}
+EOF
+
+chmod 600 "$HOME/.mentions-assistant-config"
+echo -e "${GREEN}✓ Configuration saved${NC}"
 
 echo ""
 
-# Update check-mentions-with-monitor.sh with paths
-cat > "$INSTALL_DIR/check-mentions-with-monitor.sh" <<EOF
+# Create unified checker wrapper
+cat > "$INSTALL_DIR/check-mentions-unified.sh" <<EOF
 #!/bin/bash
 
-# Wrapper for check-mentions-notify.py that uses monitoring project's venv
-# This provides access to httpx for reporting to the monitoring server
+# Unified Mentions Checker Wrapper
+# Uses virtual environment if available, otherwise uses system Python
 
 PROJECT_DIR="$PROJECT_DIR"
 
-# Check if virtual environment exists
-if [ ! -d "\$PROJECT_DIR/venv" ]; then
-    echo "ERROR: Virtual environment not found at \$PROJECT_DIR/venv"
-    echo "Run \$PROJECT_DIR/setup.sh first"
-    exit 1
-fi
-
-# Activate virtual environment
-source "\$PROJECT_DIR/venv/bin/activate"
-
-# Set monitoring server URL from environment or use default
+# Set environment variables
 export MONITOR_SERVER_URL="\${MONITOR_SERVER_URL:-http://localhost:8000}"
 export CLIENT_ID="\$(hostname)"
 
-# Run the Python script
-python3 "\$HOME/scripts/slack-assistant/check-mentions-notify.py"
-
-# Deactivate when done
-deactivate
+# Try to use project venv if available, otherwise use system Python
+if [ -d "\$PROJECT_DIR/venv" ]; then
+    source "\$PROJECT_DIR/venv/bin/activate"
+    python3 "\$HOME/scripts/slack-assistant/check-all-mentions.py"
+    deactivate
+else
+    python3 "\$HOME/scripts/slack-assistant/check-all-mentions.py"
+fi
 EOF
 
-chmod +x "$INSTALL_DIR/check-mentions-with-monitor.sh"
+chmod +x "$INSTALL_DIR/check-mentions-unified.sh"
 
 echo -e "${GREEN}✓ Configuration updated${NC}"
 echo ""
@@ -209,7 +391,7 @@ echo
 echo
 
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    PLIST_FILE="$HOME/Library/LaunchAgents/com.user.slack-monitor-client.plist"
+    PLIST_FILE="$HOME/Library/LaunchAgents/com.user.mentions-assistant.plist"
 
     cat > "$PLIST_FILE" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -217,12 +399,12 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.user.slack-monitor-client</string>
+    <string>com.user.mentions-assistant</string>
 
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>$HOME/scripts/slack-assistant/check-mentions-with-monitor.sh</string>
+        <string>$HOME/scripts/slack-assistant/check-mentions-unified.sh</string>
     </array>
 
     <!-- Run every hour during work hours (8 AM - 7 PM) -->
@@ -239,10 +421,10 @@ done)
     </array>
 
     <key>StandardOutPath</key>
-    <string>$HOME/Library/Logs/slack-monitor-client.log</string>
+    <string>$HOME/Library/Logs/mentions-assistant.log</string>
 
     <key>StandardErrorPath</key>
-    <string>$HOME/Library/Logs/slack-monitor-client-error.log</string>
+    <string>$HOME/Library/Logs/mentions-assistant-error.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -265,6 +447,8 @@ EOF
 
     echo -e "${GREEN}✓ LaunchD automation configured${NC}"
     echo "  Runs hourly from 8 AM to 7 PM"
+    PLATFORMS_STR=$(printf " and %s" "${PLATFORMS[@]}" | sed 's/^ and //' | sed 's/ and \(.*\)/ and \1/')
+    echo "  Monitoring: $PLATFORMS_STR"
     echo ""
 fi
 
@@ -293,11 +477,19 @@ echo "  $INSTALL_DIR"
 echo ""
 echo -e "${YELLOW}To test manually:${NC}"
 echo "  cd $INSTALL_DIR"
-echo "  ./check-mentions-with-monitor.sh"
+echo "  ./check-mentions-unified.sh"
+echo ""
+echo "  Or test individual platforms:"
+if [[ " ${PLATFORMS[@]} " =~ " slack " ]]; then
+    echo "    python3 $INSTALL_DIR/check-mentions-notify.py"
+fi
+if [[ " ${PLATFORMS[@]} " =~ " teams " ]]; then
+    echo "    python3 $INSTALL_DIR/check-teams-mentions.py"
+fi
 echo ""
 echo -e "${YELLOW}To view logs:${NC}"
-echo "  tail -f ~/Library/Logs/slack-monitor-client.log"
+echo "  tail -f ~/Library/Logs/mentions-assistant.log"
 echo ""
 echo -e "${YELLOW}To disable automation:${NC}"
-echo "  launchctl unload ~/Library/LaunchAgents/com.user.slack-monitor-client.plist"
+echo "  launchctl unload ~/Library/LaunchAgents/com.user.mentions-assistant.plist"
 echo ""
