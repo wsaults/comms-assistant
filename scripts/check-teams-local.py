@@ -1,0 +1,1 @@
+../client/check-teams-local.py

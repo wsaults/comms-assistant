@@ -46,7 +46,7 @@ cd slack-mentions-assistant
 ./setup.sh
 
 # Start server + ngrok + dashboard
-./run.sh
+./scripts/run.sh
 ```
 
 The dashboard will show:
@@ -96,8 +96,8 @@ slack-mentions-assistant/
 ├── setup.sh                   # Server setup (one-time)
 ├── setup-client.sh            # Client setup with platform selection
 ├── setup-teams.sh             # Quick Teams-only setup
-├── run.sh                     # Start everything
-├── stop.sh                    # Stop server
+├── scripts/run.sh                     # Start everything
+├── scripts/stop.sh                    # Stop server
 ├── requirements.txt           # All dependencies
 │
 ├── server/
@@ -108,12 +108,14 @@ slack-mentions-assistant/
 │   ├── main.py                # Textual TUI
 │   └── __init__.py
 │
-├── scripts/slack-assistant/   # Client scripts
-│   ├── check-mentions-notify.py       # Slack checker
-│   ├── check-teams-mentions.py        # Teams checker
-│   ├── check-all-mentions.py          # Unified checker
+├── scripts/                   # Client scripts
+│   ├── check-messages.py              # Unified checker (all platforms + channels)
+│   ├── check-mentions-notify.py       # Slack checker (single workspace)
+│   ├── check-multi-slack.py           # Slack checker (multi-workspace)
+│   ├── check-teams-mentions.py        # Teams MCP checker
+│   ├── check-teams-local.py           # Teams local DB checker
 │   ├── check-mentions-unified.sh      # Wrapper script
-│   └── find-team-id.py
+│   └── find-team-id.py                # Utility script
 │
 └── launchd/
     ├── com.user.mentions-assistant.plist    # Unified agent
@@ -126,13 +128,13 @@ slack-mentions-assistant/
 
 ```bash
 # Start everything
-./run.sh
+./scripts/run.sh
 
 # Start with mock data (for testing/demo)
-./run.sh --mock    # Generates fresh data from TODAY
+./scripts/run.sh --mock    # Generates fresh data from TODAY
 
 # Stop server
-./stop.sh
+./scripts/stop.sh
 
 # View server logs
 tail -f ~/Library/Logs/slack-monitor-server.log
@@ -146,16 +148,18 @@ tail -f ~/Library/Logs/slack-monitor-server.log
 ### Client Commands
 
 ```bash
-# Manual test (unified checker)
-cd ~/scripts/slack-assistant
-./check-mentions-unified.sh
+# Manual test (unified checker via wrapper script)
+~/scripts/check-mentions-unified.sh
 
 # Test individual platforms
-python3 ~/scripts/slack-assistant/check-mentions-notify.py  # Slack
-python3 ~/scripts/slack-assistant/check-teams-mentions.py   # Teams
+python3 ~/scripts/check-mentions-notify.py  # Slack (single workspace)
+python3 ~/scripts/check-multi-slack.py      # Slack (multi-workspace)
+python3 ~/scripts/check-teams-mentions.py   # Teams MCP
+python3 ~/scripts/check-teams-local.py      # Teams local DB
 
-# Test with specific platforms
-python3 ~/scripts/slack-assistant/check-all-mentions.py --platforms slack teams
+# Test unified checker
+python3 ~/scripts/check-messages.py              # All platforms
+python3 ~/scripts/check-messages.py --no-notify  # Without server reporting
 
 # View logs
 tail -f ~/Library/Logs/mentions-assistant.log        # Unified
@@ -273,7 +277,7 @@ For remote access (clients on different networks):
 
 3. **Start server:**
    ```bash
-   ./run.sh
+   ./scripts/run.sh
    ```
    ngrok starts automatically and URL appears in dashboard
 
@@ -287,7 +291,7 @@ The dashboard can be tested with mock data without real Slack/Teams connections:
 
 ```bash
 # Start with fresh mock data from today
-./run.sh --mock
+./scripts/run.sh --mock
 
 # Or seed data manually after server is running
 curl -X POST "http://localhost:8000/api/debug/seed?scenario=default"
@@ -410,7 +414,7 @@ git push origin main
 
 ### Multi-machine personal use:
 1. Clone to each machine
-2. Run `./run.sh` on main machine (server)
+2. Run `./scripts/run.sh` on main machine (server)
 3. Run `./setup-client.sh` on other machines (clients)
 4. Each machine can monitor different platforms
 

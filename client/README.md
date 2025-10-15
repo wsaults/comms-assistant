@@ -62,7 +62,7 @@ The centralized server/dashboard runs on **one machine only**:
 # On the main monitoring machine
 cd slack-mentions-assistant  # or comms-assistant if cloned from GitHub
 ./setup.sh   # One-time setup
-./run.sh     # Start server, ngrok, and dashboard
+./scripts/run.sh     # Start server, ngrok, and dashboard
 ```
 
 ## How It Works
@@ -87,7 +87,7 @@ cd slack-mentions-assistant  # or comms-assistant if cloned from GitHub
 ## Troubleshooting
 
 ### "Cannot reach server"
-- Make sure server is running: `./run.sh`
+- Make sure server is running: `./scripts/run.sh`
 - Check server URL is correct
 - Verify firewall allows connections
 - Test: `curl http://SERVER_URL/health`

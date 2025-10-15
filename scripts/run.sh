@@ -7,16 +7,22 @@
 #   ./run.sh              # Start normally
 #   ./run.sh --mock       # Start and seed with mock data from today
 #   ./run.sh --seed       # Same as --mock
+#   ./run.sh --clear      # Clear database and start fresh
 
 set -e
 
-PROJECT_DIR="/Users/will/Projects/Saults/slack-mentions-assistant"
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_DIR"
 
 # Parse arguments
 SEED_MOCK=false
+CLEAR_DB=false
 if [[ "$1" == "--mock" ]] || [[ "$1" == "--seed" ]]; then
     SEED_MOCK=true
+elif [[ "$1" == "--clear" ]]; then
+    CLEAR_DB=true
 fi
 
 # Colors
@@ -33,6 +39,11 @@ echo ""
 
 if [ "$SEED_MOCK" = true ]; then
     echo -e "${YELLOW}📊 Mock data mode enabled - will seed data from today${NC}"
+    echo ""
+fi
+
+if [ "$CLEAR_DB" = true ]; then
+    echo -e "${YELLOW}🗑️  Clear mode enabled - will clear all data from database${NC}"
     echo ""
 fi
 
@@ -117,6 +128,31 @@ if [ "$SEED_MOCK" = true ]; then
     else
         echo -e "${RED}✗ Failed to seed mock data${NC}"
         echo "  Response: $SEED_RESPONSE"
+    fi
+    echo ""
+fi
+
+# ============================================================================
+# CLEAR DATABASE (if requested)
+# ============================================================================
+
+if [ "$CLEAR_DB" = true ]; then
+    echo -e "${YELLOW}→ Clearing all data from database...${NC}"
+
+    CLEAR_RESPONSE=$(curl -s -X DELETE "http://localhost:8000/api/debug/clear")
+
+    # Parse response
+    STATUS=$(echo "$CLEAR_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('status', 'unknown'))" 2>/dev/null)
+
+    if [ "$STATUS" = "success" ]; then
+        echo -e "${GREEN}✓ Database cleared${NC}"
+        MENTIONS=$(echo "$CLEAR_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('cleared', {}).get('mentions', 0))" 2>/dev/null)
+        ACTIVITY=$(echo "$CLEAR_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('cleared', {}).get('channel_activity', 0))" 2>/dev/null)
+        echo "  Mentions removed: $MENTIONS"
+        echo "  Activity records removed: $ACTIVITY"
+    else
+        echo -e "${RED}✗ Failed to clear database${NC}"
+        echo "  Response: $CLEAR_RESPONSE"
     fi
     echo ""
 fi

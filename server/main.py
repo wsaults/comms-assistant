@@ -46,6 +46,7 @@ class Mention(BaseModel):
     is_question: bool
     responded: bool
     client_id: str
+    workspace: str = "unknown"  # Slack workspace or Teams org name
 
 class ConversationSummary(BaseModel):
     channel: str
@@ -202,7 +203,8 @@ def save_mention_to_db(mention: Mention):
             text=mention.text,
             is_question=mention.is_question,
             responded=mention.responded,
-            client_id=mention.client_id
+            client_id=mention.client_id,
+            workspace=mention.workspace
         )
     finally:
         session.close()
@@ -440,7 +442,8 @@ async def startup_event():
                 text=db_mention.text,
                 is_question=db_mention.is_question,
                 responded=db_mention.responded,
-                client_id=db_mention.client_id
+                client_id=db_mention.client_id,
+                workspace=getattr(db_mention, 'workspace', 'unknown')  # Handle old DB records
             )
             store.mentions.append(mention)
 

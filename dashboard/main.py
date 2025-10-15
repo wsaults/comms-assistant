@@ -73,7 +73,7 @@ class StatsWidget(Static):
     unread_count = reactive(0)
     last_hour_count = reactive(0)
     active_channels = reactive(0)
-    connected_clients = reactive(0)
+    connected_orgs = reactive(0)
     total_mentions = reactive(0)
     last_update = reactive("")
     ngrok_url = reactive("")
@@ -82,7 +82,7 @@ class StatsWidget(Static):
         stats = f"""[yellow]🔔 Unread Mentions:[/yellow]   {self.unread_count:>6}
 [yellow]💬 Last Hour:[/yellow]        {self.last_hour_count:>6}
 [yellow]📺 Active Channels:[/yellow]  {self.active_channels:>6}
-[yellow]💻 Connected Clients:[/yellow] {self.connected_clients:>6}
+[yellow]🏢 Connected Orgs:[/yellow]    {self.connected_orgs:>6}
 [yellow]📝 Total Mentions:[/yellow]   {self.total_mentions:>6}
 [yellow]🕐 Last Update:[/yellow]      {self.last_update:>12}"""
 
@@ -102,6 +102,7 @@ class MentionsTable(DataTable):
 
         # Add columns
         self.add_column("Time", key="time", width=10)
+        self.add_column("Workspace", key="workspace", width=15)
         self.add_column("Channel", key="channel", width=15)
         self.add_column("User", key="user", width=12)
         self.add_column("Message", key="message")
@@ -124,6 +125,16 @@ class MentionsTable(DataTable):
 
         if not mentions:
             return
+
+        # Deduplicate mentions with same text and timestamp
+        seen = set()
+        deduped = []
+        for mention in mentions:
+            key = (mention.get("text", ""), mention.get("timestamp", ""))
+            if key not in seen:
+                seen.add(key)
+                deduped.append(mention)
+        mentions = deduped
 
         # Apply search filter if set
         if self.search_filter:
@@ -148,15 +159,16 @@ class MentionsTable(DataTable):
             except:
                 timestamp = "--:--"
 
-            # Format channel and user
+            # Format workspace, channel and user
+            workspace = mention.get("workspace", "unknown")[:15]
             channel = mention.get("channel", "?")[:15]
             user = mention.get("user", "?")[:12]
 
             # Clean and truncate message text
             raw_text = mention.get("text", "")
             text = self.clean_slack_mentions(raw_text)
-            if len(text) > 45:
-                text = text[:42] + "..."
+            if len(text) > 40:
+                text = text[:37] + "..."
 
             # Status indicator
             from rich.text import Text
@@ -170,6 +182,7 @@ class MentionsTable(DataTable):
             # Add row with Rich text formatting
             self.add_row(
                 timestamp,
+                Text(workspace, style="magenta"),
                 Text(channel, style="cyan"),
                 Text(user, style="yellow"),
                 text,
@@ -178,42 +191,43 @@ class MentionsTable(DataTable):
 
 
 class MentionsGraphWidget(Static):
-    """Widget displaying mentions per client as a simple graph"""
+    """Widget displaying mentions per organization as a simple graph"""
 
     all_mentions = reactive([])
+    org_names = reactive({})
 
     def render(self) -> str:
-        lines = ["[bold green]📈 Mentions Per Client (8am-8pm Today)[/bold green]\n"]
+        lines = ["[bold green]📈 Mentions Per Organization (8am-8pm Today)[/bold green]\n"]
 
         if not self.all_mentions:
             lines.append("[dim]No data yet...[/dim]")
             return "\n".join(lines)
 
-        # Group mentions by client and hour
+        # Group mentions by organization and hour
         from collections import defaultdict
-        client_hourly = defaultdict(lambda: defaultdict(int))
+        org_hourly = defaultdict(lambda: defaultdict(int))
 
         for mention in self.all_mentions:
             try:
                 timestamp = datetime.fromisoformat(mention["timestamp"])
                 hour = timestamp.hour
-                client_id = mention.get("client_id", "unknown")
-                client_hourly[client_id][hour] += 1
+                org_id = mention.get("client_id", "unknown")
+                org_hourly[org_id][hour] += 1
             except:
                 continue
 
-        if not client_hourly:
+        if not org_hourly:
             lines.append("[dim]No data yet...[/dim]")
             return "\n".join(lines)
 
-        # Get all unique clients
-        clients = list(client_hourly.keys())
+        # Get all unique organizations
+        orgs = list(org_hourly.keys())
         colors = ["cyan", "magenta", "yellow", "green", "blue", "red"]
 
         # Calculate max for scaling
         max_count = 0
-        for client_data in client_hourly.values():
-            max_count = max(max_count, max(client_data.values()) if client_data else 0)
+        for org_data in org_hourly.values():
+            max_count = max(max_count, max(org_data.values()) if org_data else 0)
 
         if max_count == 0:
             max_count = 1
@@ -232,10 +246,10 @@ class MentionsGraphWidget(Static):
             for h in range(hours_to_show):
                 hour = start_hour + h
 
-                # Check if any client has data at this hour/height
+                # Check if any organization has data at this hour/height
                 char = " "
-                for i, client_id in enumerate(clients):
-                    count = client_hourly[client_id].get(hour, 0)
+                for i, org_id in enumerate(orgs):
+                    count = org_hourly[org_id].get(hour, 0)
                     scaled = int((count / max_count) * graph_height) if max_count > 0 else 0
 
                     if scaled >= row:
@@ -271,11 +285,13 @@ class MentionsGraphWidget(Static):
 
         # Legend
         lines.append("")
-        lines.append("[bold]Clients:[/bold]")
-        for i, client_id in enumerate(clients[:5]):
+        lines.append("[bold]Organizations:[/bold]")
+        for i, org_id in enumerate(orgs[:5]):
             color = colors[i % len(colors)]
-            display_name = client_id[:20] if len(client_id) <= 20 else client_id[:17] + "..."
-            total = sum(client_hourly[client_id].values())
+            # Use workspace name from mapping if available, otherwise use client_id
+            workspace_name = self.org_names.get(org_id, org_id)
+            display_name = workspace_name[:20] if len(workspace_name) <= 20 else workspace_name[:17] + "..."
+            total = sum(org_hourly[org_id].values())
             lines.append(f"[{color}]●[/{color}] {display_name} ({total} mentions)")
 
         return "\n".join(lines)
@@ -296,6 +312,7 @@ class PriorityAlertsWidget(Static):
 
     mentions = reactive([])
     stats = reactive({})
+    org_names = reactive({})
 
     def render(self) -> str:
         lines = ["[bold red]🚨 Priority Alerts[/bold red]\n"]
@@ -357,7 +374,9 @@ class PriorityAlertsWidget(Static):
         if high_activity_channels:
             lines.append("[bold yellow on black]⚡ HIGH ACTIVITY CHANNELS[/bold yellow on black]")
             for channel, count, client_id in high_activity_channels[:3]:
-                client_display = client_id[:15] if len(client_id) <= 15 else client_id[:12] + "..."
+                # Use workspace name from mapping if available, otherwise use client_id
+                workspace_name = self.org_names.get(client_id, client_id)
+                client_display = workspace_name[:15] if len(workspace_name) <= 15 else workspace_name[:12] + "..."
                 lines.append(f"  [yellow]⚡[/yellow] [cyan]{channel}[/cyan] - {count} msgs/hr ([dim]{client_display}[/dim])")
 
         if not direct_mentions and not questions and not high_activity_channels:
@@ -367,7 +386,7 @@ class PriorityAlertsWidget(Static):
 
 
 class ChannelActivityWidget(Static):
-    """Widget displaying channel activity across all clients"""
+    """Widget displaying channel activity across all organizations"""
 
     mentions = reactive([])
     stats = reactive({})
@@ -510,11 +529,12 @@ class TopActivityWidget(Static):
         return "\n".join(lines)
 
 
-class ClientHealthWidget(Static):
-    """Widget displaying client health status with last check-in times"""
+class OrgHealthWidget(Static):
+    """Widget displaying organization health status with last check-in times"""
 
     stats = reactive({})
-    connected_clients = reactive({})
+    connected_orgs = reactive({})
+    org_names = reactive({})
 
     def render(self) -> str:
         lines = []
@@ -528,12 +548,12 @@ class ClientHealthWidget(Static):
         idle_count = 0
         stale_count = 0
 
-        # Sort clients by status (active first, then idle, then stale)
-        client_status = []
+        # Sort organizations by status (active first, then idle, then stale)
+        org_status = []
 
-        for client_id, client_stats in self.stats.items():
-            # Get last seen timestamp from connected_clients or use current time
-            last_seen = self.connected_clients.get(client_id)
+        for org_id, org_stats in self.stats.items():
+            # Get last seen timestamp from connected_orgs or use current time
+            last_seen = self.connected_orgs.get(org_id)
 
             if not last_seen:
                 # No last_seen data, assume stale
@@ -576,11 +596,11 @@ class ClientHealthWidget(Static):
                     hours = int(time_diff / 3600)
                     time_ago = f"{hours}h ago"
 
-            client_status.append((client_id, status, status_icon, status_color, time_ago))
+            org_status.append((org_id, status, status_icon, status_color, time_ago))
 
         # Sort by status priority (active, idle, stale)
         status_priority = {"active": 0, "idle": 1, "stale": 2}
-        client_status.sort(key=lambda x: status_priority[x[1]])
+        org_status.sort(key=lambda x: status_priority[x[1]])
 
         # Add summary line
         lines.append(f"[green]Active: {active_count}[/green] │ [yellow]Idle: {idle_count}[/yellow] │ [red]Stale: {stale_count}[/red]\n")
@@ -589,9 +609,11 @@ class ClientHealthWidget(Static):
         if stale_count > 0:
             lines.append("[red]⚠ Warning: Some clients haven't checked in recently[/red]\n")
 
-        # List each client with status
-        for client_id, status, icon, color, time_ago in client_status[:6]:  # Show up to 6 clients
-            display_id = client_id[:18] if len(client_id) <= 18 else client_id[:15] + "..."
+        # List each org with status
+        for org_id, status, icon, color, time_ago in org_status[:6]:  # Show up to 6 orgs
+            # Use workspace name from mapping if available, otherwise use client_id
+            workspace_name = self.org_names.get(org_id, org_id)
+            display_id = workspace_name[:18] if len(workspace_name) <= 18 else workspace_name[:15] + "..."
             lines.append(f"{icon} [{color}]{display_id:<18}[/{color}] │ {time_ago}")
 
         return "\n".join(lines)
@@ -867,8 +889,8 @@ class QuickStatsWidget(Static):
         unique_channels = len(set(m.get("channel") for m in self.mentions))
         unique_users = len(set(m.get("user") for m in self.mentions))
 
-        # Active clients
-        active_clients = len(self.stats)
+        # Active organizations
+        active_orgs = len(self.stats)
 
         return f"""[bold cyan]📊 Quick Stats[/bold cyan]
 
@@ -877,7 +899,7 @@ class QuickStatsWidget(Static):
 [yellow]Questions:[/yellow]          {questions:>6}
 [yellow]Active Channels:[/yellow]   {unique_channels:>6}
 [yellow]Active Users:[/yellow]      {unique_users:>6}
-[yellow]Connected Clients:[/yellow] {active_clients:>6}"""
+[yellow]Connected Orgs:[/yellow]    {active_orgs:>6}"""
 
 
 class MonitorCommands(Provider):
@@ -912,7 +934,7 @@ class MonitorCommands(Provider):
             ("Refresh Data", app.action_refresh, "Refresh all data from server"),
             ("Toggle Stats", make_toggle_callback("📊 Stats Overview"), "Show/hide Stats Overview section"),
             ("Toggle Channel Activity", make_toggle_callback("📺 Channel Activity"), "Show/hide Channel Activity section"),
-            ("Toggle Client Health", make_toggle_callback("💚 Client Health Monitor"), "Show/hide Client Health Monitor section"),
+            ("Toggle Client Health", make_toggle_callback("💚 Client Health"), "Show/hide Client Health section"),
             ("Toggle Peak Hours", make_toggle_callback("📈 Peak Hours Summary"), "Show/hide Peak Hours Summary section"),
             ("Focus Priority Alerts", make_focus_callback("priority-alerts-widget"), "Jump to Priority Alerts widget"),
             ("Focus Mentions", make_focus_callback("mentions-table"), "Jump to Mentions Table widget"),
@@ -1053,7 +1075,7 @@ class SlackMonitorApp(App):
         padding: 1;
     }
 
-    #client-health-widget {
+    #org-health-widget {
         height: auto;
         padding: 1;
     }
@@ -1259,8 +1281,8 @@ class SlackMonitorApp(App):
                             yield ChannelActivityWidget(id="channel-activity-widget")
 
                         # Client Health - collapsed by default to save space
-                        with Collapsible(title="💚 Client Health Monitor", collapsed=True):
-                            yield ClientHealthWidget(id="client-health-widget")
+                        with Collapsible(title="💚 Client Health", collapsed=True):
+                            yield OrgHealthWidget(id="org-health-widget")
 
                         # Peak Hours - collapsed by default to save space
                         with Collapsible(title="📈 Peak Hours Summary", collapsed=True):
@@ -1472,8 +1494,21 @@ class SlackMonitorApp(App):
                 self.log(f"Unexpected error: {type(e).__name__}: {e}")
                 await asyncio.sleep(5)
 
+    def _build_org_name_mapping(self) -> dict:
+        """Build mapping from client_id to workspace name"""
+        mapping = {}
+        for mention in self.data["mentions"]:
+            client_id = mention.get("client_id")
+            workspace = mention.get("workspace")
+            if client_id and workspace:
+                mapping[client_id] = workspace
+        return mapping
+
     def update_widgets(self) -> None:
         """Update all widgets with current data"""
+        # Build org name mapping for all widgets
+        org_names = self._build_org_name_mapping()
+
         # ==================== MONITOR TAB WIDGETS ====================
 
         # Update stats widget
@@ -1488,7 +1523,7 @@ class SlackMonitorApp(App):
         stats_widget.unread_count = total_unread
         stats_widget.last_hour_count = total_last_hour
         stats_widget.active_channels = len(all_channels)
-        stats_widget.connected_clients = len(self.data["stats"])
+        stats_widget.connected_orgs = len(self.data["stats"])
         stats_widget.total_mentions = len(self.data["mentions"])
         stats_widget.last_update = datetime.now().strftime("%I:%M:%S %p")
 
@@ -1496,6 +1531,7 @@ class SlackMonitorApp(App):
         priority_widget = self.query_one(PriorityAlertsWidget)
         priority_widget.mentions = self.data["mentions"]
         priority_widget.stats = self.data["stats"]
+        priority_widget.org_names = org_names
 
         # Update mentions table
         mentions_widget = self.query_one(MentionsTable)
@@ -1510,21 +1546,23 @@ class SlackMonitorApp(App):
         # Update chart (Monitor tab)
         chart_widget = self.query_one("#chart-widget", MentionsGraphWidget)
         chart_widget.all_mentions = self.data["mentions"]
+        chart_widget.org_names = org_names
 
         # Update top activity widget
         top_activity_widget = self.query_one("#top-activity-widget", TopActivityWidget)
         top_activity_widget.mentions = self.data["mentions"]
 
-        # Update client health widget
-        client_health_widget = self.query_one(ClientHealthWidget)
-        client_health_widget.stats = self.data["stats"]
+        # Update org health widget
+        org_health_widget = self.query_one(OrgHealthWidget)
+        org_health_widget.stats = self.data["stats"]
         # Extract last seen timestamps from stats data
-        connected_clients_map = {}
-        for client_id, client_stats in self.data["stats"].items():
-            timestamp = client_stats.get("timestamp")
+        connected_orgs_map = {}
+        for org_id, org_stats in self.data["stats"].items():
+            timestamp = org_stats.get("timestamp")
             if timestamp:
-                connected_clients_map[client_id] = timestamp
-        client_health_widget.connected_clients = connected_clients_map
+                connected_orgs_map[org_id] = timestamp
+        org_health_widget.connected_orgs = connected_orgs_map
+        org_health_widget.org_names = org_names
 
         # Update peak hours widget
         peak_hours_widget = self.query_one(PeakHoursWidget)
@@ -1548,6 +1586,7 @@ class SlackMonitorApp(App):
         # Update analytics sparklines
         analytics_chart_widget = self.query_one("#analytics-chart-widget", MentionsGraphWidget)
         analytics_chart_widget.all_mentions = self.data["mentions"]
+        analytics_chart_widget.org_names = org_names
 
     def action_refresh(self) -> None:
         """Refresh data"""

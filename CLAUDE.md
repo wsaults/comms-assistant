@@ -16,10 +16,12 @@ The system is designed to run cost-free by using Claude Code subscriptions inste
 
 ### Core Components
 
-**Scripts (`~/scripts/slack-assistant/`):**
-- `check-mentions-notify.py` - Slack mention checker with monitoring integration
-- `check-teams-mentions.py` - Teams mention checker with monitoring integration
-- `check-all-mentions.py` - Unified checker that can monitor Slack, Teams, or both
+**Scripts (`~/scripts/`):**
+- `check-messages.py` - **Unified checker** - checks mentions AND channels, supports `--no-notify` flag
+- `check-mentions-notify.py` - Slack mention checker with monitoring integration (single workspace)
+- `check-multi-slack.py` - Slack mention checker for multiple workspaces
+- `check-teams-mentions.py` - Teams mention checker with monitoring integration (MCP-based)
+- `check-teams-local.py` - Teams mention checker using local database (no API required)
 - `check-mentions-unified.sh` - Wrapper script for unified checker (used by LaunchD)
 
 **Setup Scripts:**
@@ -35,6 +37,7 @@ The system is designed to run cost-free by using Claude Code subscriptions inste
   - Slack: `@modelcontextprotocol/server-slack` - Uses Slack User Token (`xoxp-*`) and Team ID
   - Teams: `@floriscornel/teams-mcp` - Uses OAuth authentication (browser-based)
 - Platform config (`~/.mentions-assistant-config`) - Stores platform selection and settings
+- Teams Local: No configuration needed - reads directly from Teams IndexedDB database
 
 **Logging:**
 - `~/Library/Logs/mentions-assistant.log` - Unified checker output
@@ -48,7 +51,8 @@ The system is designed to run cost-free by using Claude Code subscriptions inste
 2. **Execute** → Python script queries MCP servers
 3. **Process** →
    - Slack: Direct API calls via slack-sdk
-   - Teams: Claude Code MCP queries via `get_my_mentions` tool
+   - Teams (MCP): Claude Code MCP queries via `get_my_mentions` tool
+   - Teams (Local): Read directly from Teams IndexedDB database (30-60s parse time)
 4. **Filter** → Recent mentions (last hour by default)
 5. **Notify** → macOS notifications via `osascript`
 6. **Report** → Send data to monitoring server (optional)
@@ -69,17 +73,16 @@ The system is designed to run cost-free by using Claude Code subscriptions inste
 ### Testing Scripts
 
 ```bash
-# Test Slack checker
-python3 ~/scripts/slack-assistant/check-mentions-notify.py
+# Unified checker - checks mentions AND channels
+python3 ~/scripts/check-messages.py              # With server reporting
+python3 ~/scripts/check-messages.py --no-notify  # Without server reporting
+python3 ~/scripts/check-messages.py --hours 24   # Last 24 hours
 
-# Test Teams checker
-python3 ~/scripts/slack-assistant/check-teams-mentions.py
-
-# Test unified checker (reads platform config)
-python3 ~/scripts/slack-assistant/check-all-mentions.py
-
-# Test unified checker with specific platforms
-python3 ~/scripts/slack-assistant/check-all-mentions.py --platforms slack teams
+# Individual platform checkers
+python3 ~/scripts/check-mentions-notify.py       # Slack (single workspace)
+python3 ~/scripts/check-multi-slack.py           # Slack (multi-workspace)
+python3 ~/scripts/check-teams-mentions.py        # Teams MCP only
+python3 ~/scripts/check-teams-local.py --hours 24   # Teams local only
 
 # Test MCP connections
 claude code "list my slack channels"          # Test Slack MCP
@@ -151,12 +154,14 @@ nano ~/.mentions-assistant-config
 Update the platforms array:
 ```json
 {
-  "platforms": ["slack", "teams"],
+  "platforms": ["slack", "teams", "teams-local"],
   "monitor_server_url": "http://localhost:8000",
   "client_id": "hostname",
   "check_interval_hours": 1
 }
 ```
+
+Note: You can use "teams" (MCP-based) OR "teams-local" (local database), or both if you want redundancy.
 
 Then restart the LaunchD agent:
 ```bash
@@ -235,7 +240,7 @@ Required Teams Permissions (granted during OAuth):
 
 When editing scripts, these paths must be absolute (not relative):
 
-- **Scripts directory**: `~/scripts/slack-assistant/` (expand `~` to full path in LaunchD)
+- **Scripts directory**: `~/scripts/` (expand `~` to full path in LaunchD)
 - **Logs directory**: `~/Library/Logs/`
 - **MCP config**: `~/.claude/mcp-servers.json`
 - **Platform config**: `~/.mentions-assistant-config`
@@ -307,11 +312,58 @@ For Slack:
 tail -50 ~/Library/Logs/slack-mentions.log
 ```
 
-For Teams:
+For Teams (MCP):
 ```bash
 # Verify OAuth permissions were granted
 # Check logs for MCP errors
 tail -50 ~/Library/Logs/teams-mentions.log
+```
+
+For Teams (Local):
+```bash
+# Check database exists
+ls ~/Library/Containers/com.microsoft.teams2/Data/Library/Application\ Support/Microsoft/MSTeams/EBWebView/WV2Profile_tfw/IndexedDB/
+
+# Try viewing all mentions (not just recent)
+python3 client/check-teams-local.py --all
+
+# Check if dfindexeddb is installed
+pip3 show dfindexeddb
+```
+
+### Teams Local database not found
+
+**Check Teams v2 is installed:**
+```bash
+ls "/Applications/Microsoft Teams.app"
+```
+
+**Verify database path exists:**
+```bash
+ls ~/Library/Containers/com.microsoft.teams2/Data/Library/Application\ Support/Microsoft/MSTeams/EBWebView/WV2Profile_tfw/IndexedDB/
+```
+
+**Ensure Teams has been used recently** - the database needs to be populated with cached data
+
+### Teams Local parse too slow
+
+- Normal parse time: 30-60 seconds
+- Large databases: up to 2 minutes
+- This is expected behavior for database parsing
+- Consider running less frequently (hourly instead of every 15 minutes)
+- Not suitable for real-time notifications
+
+### dfindexeddb not found
+
+```bash
+# Install it
+pip3 install dfindexeddb
+
+# Verify installation
+~/Library/Python/3.9/bin/dfindexeddb --help
+
+# Add to PATH if needed
+export PATH="$PATH:$HOME/Library/Python/3.9/bin"
 ```
 
 ## Security Notes
@@ -330,7 +382,7 @@ tail -50 ~/Library/Logs/teams-mentions.log
 1. Find or create an MCP server for the platform
 2. Add MCP server to `~/.claude/mcp-servers.json`
 3. Create a platform-specific checker script (e.g., `check-discord-mentions.py`)
-4. Add platform to `check-all-mentions.py` logic
+4. Add platform to `check-messages.py` logic (add a new check function and platform case)
 5. Update `setup-client.sh` to include new platform option
 
 ### Modifying notification behavior
@@ -378,13 +430,103 @@ nano ~/.mentions-assistant-config
 - Filters results by timestamp for recent mentions
 - Requires user token (not bot token) to search user mentions
 
-### Microsoft Teams
+### Microsoft Teams (MCP)
 
 - Uses Teams MCP server via Claude Code
 - Queries mentions using `get_my_mentions` tool
 - OAuth authentication provides secure, long-lived access
 - Tokens auto-refresh through MCP server
 - Requires Node.js 18+ for MCP server
+
+### Microsoft Teams (Local)
+
+**Overview:**
+- Reads mentions directly from Teams v2 local IndexedDB database
+- **No API access or organizational permissions required**
+- Completely offline operation
+- Parse time: 30-60 seconds per check
+
+**How it works:**
+- Teams v2 stores data in IndexedDB at: `~/Library/Containers/com.microsoft.teams2/Data/Library/Application Support/Microsoft/MSTeams/EBWebView/WV2Profile_tfw/IndexedDB/https_teams.microsoft.com_0.indexeddb.leveldb`
+- Uses `dfindexeddb` tool to parse LevelDB format
+- Extracts mentions from Database 25 (activities) and matches with Database 15 (message content)
+- Parses HTML message content to extract plain text
+
+**Installation:**
+```bash
+pip3 install dfindexeddb
+```
+
+**Usage:**
+```bash
+# Check last hour
+python3 client/check-teams-local.py
+
+# Check last 24 hours
+python3 client/check-teams-local.py --hours 24
+
+# View all cached mentions
+python3 client/check-teams-local.py --all
+
+# JSON output for integration
+python3 client/check-teams-local.py --json
+```
+
+**Advantages:**
+- ✅ No setup complexity (one pip install)
+- ✅ No external services or webhooks needed
+- ✅ Works completely offline
+- ✅ Access to historical data (all cached mentions)
+- ✅ No organizational permissions needed
+
+**Limitations:**
+- ⚠️ Only cached messages (typically recent weeks)
+- ⚠️ Parse time of 30-60 seconds (not suitable for real-time)
+- ⚠️ Requires Teams v2 (New Teams)
+- ⚠️ Poll-based (must run periodically)
+
+**Best for:**
+- Hourly or daily automated checks
+- Situations where API access is not available
+- Privacy-focused users who want local-only operation
+- Historical mention analysis
+
+**Documentation:**
+- `TEAMS_LOCAL_ACCESS.md` - Complete technical documentation
+- `QUICK_REFERENCE.md` - Quick start guide
+
+**Utilities (in `scripts/`):**
+- `analyze-teams-db.py` - Database structure analyzer
+- `test-teams-db.py` - Database access test utility
+- `add-slack-workspace.sh` - Add Slack workspace to MCP config
+- `add-channels-to-watchlist.sh` - Add channels to watchlist
+- `remove-channels-from-watchlist.sh` - Remove channels from watchlist
+- `view-watchlist.sh` - View current watchlist
+- `update-org-name.sh` - Update workspace display name
+- `clear-db.sh` - Clear local monitoring database
+- `run.sh` - Start monitoring server
+- `stop.sh` - Stop monitoring server
+
+## Quick Usage
+
+**Recommended:** Use the unified `check-messages.py` script:
+```bash
+# Check everything (mentions + channels) with server reporting
+python3 ~/scripts/check-messages.py
+
+# Check without reporting to server
+python3 ~/scripts/check-messages.py --no-notify
+
+# Check last 24 hours
+python3 ~/scripts/check-messages.py --hours 24
+```
+
+This script:
+- ✅ Checks mentions across all platforms
+- ✅ Checks monitored channels (from watchlist)
+- ✅ Gracefully skips unavailable platforms
+- ✅ Supports `--no-notify` flag to disable server reporting
+- ✅ Auto-detects single vs multi-workspace Slack
 
 ### Multi-Platform Support
 

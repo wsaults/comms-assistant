@@ -6,6 +6,7 @@ Reports to monitoring server for dashboard display
 Uses Teams MCP server via Model Context Protocol
 """
 
+import argparse
 import json
 import os
 import subprocess
@@ -34,10 +35,26 @@ except ImportError:
 # Configuration
 HOME = Path.home()
 MCP_CONFIG = HOME / ".claude" / "mcp-servers.json"
+CONFIG_FILE = HOME / ".mentions-assistant-config"
 LOG_FILE = HOME / "Library/Logs/teams-mentions.log"
 STATE_FILE = HOME / ".teams-mentions-state"
-MONITOR_SERVER = os.getenv("MONITOR_SERVER_URL", "http://localhost:8000")
-CLIENT_ID = os.getenv("CLIENT_ID", socket.gethostname())
+
+# Load configuration with priority: config file > env var > default
+def _load_monitor_config():
+    """Load monitor server URL and client ID from config file or env vars"""
+    try:
+        if CONFIG_FILE.exists():
+            with open(CONFIG_FILE) as f:
+                config = json.load(f)
+                server_url = config.get("monitor_server_url", os.getenv("MONITOR_SERVER_URL", "http://localhost:8000"))
+                client_id = config.get("client_id", os.getenv("CLIENT_ID", socket.gethostname()))
+                return server_url, client_id
+    except Exception:
+        pass
+    # Fallback to env vars or defaults
+    return os.getenv("MONITOR_SERVER_URL", "http://localhost:8000"), os.getenv("CLIENT_ID", socket.gethostname())
+
+MONITOR_SERVER, CLIENT_ID = _load_monitor_config()
 
 
 def log(message):
@@ -52,6 +69,16 @@ def log(message):
         f.write(log_line + "\n")
 
 
+def is_teams_configured():
+    """Check if Teams MCP is configured"""
+    try:
+        with open(MCP_CONFIG) as f:
+            config = json.load(f)
+            return "teams-mcp" in config.get("mcpServers", {})
+    except:
+        return False
+
+
 def load_teams_mcp_config():
     """Load Teams MCP config"""
     try:
@@ -60,7 +87,7 @@ def load_teams_mcp_config():
             teams_config = config["mcpServers"]["teams-mcp"]
             return teams_config
     except (FileNotFoundError, KeyError, json.JSONDecodeError) as e:
-        log(f"ERROR: Could not load Teams MCP config from {MCP_CONFIG}: {e}")
+        log(f"Warning: Could not load Teams MCP config: {e}")
         return None
 
 
@@ -164,7 +191,8 @@ def report_to_server(mentions):
                 "text": text,
                 "is_question": "?" in text,
                 "responded": False,  # Assume new mentions are unresponded
-                "client_id": CLIENT_ID
+                "client_id": CLIENT_ID,
+                "workspace": "Microsoft Teams"
             }
 
             try:
@@ -215,7 +243,6 @@ async def check_teams_mentions():
     # Load Teams MCP config
     teams_config = load_teams_mcp_config()
     if not teams_config:
-        log("ERROR: No Teams MCP config found")
         return []
 
     # Extract command and args
@@ -274,9 +301,19 @@ async def check_teams_mentions():
     return mentions
 
 
-async def main_async():
+async def main_async(hours=1, notify=True):
     log("=" * 60)
     log("Teams Mention Check Started")
+
+    # Check if Teams is configured
+    if not is_teams_configured():
+        log("Teams is not configured in MCP settings")
+        log("To set up Teams:")
+        log("  1. Run: npx @floriscornel/teams-mcp@latest authenticate")
+        log("  2. Add teams-mcp to ~/.claude/mcp-servers.json")
+        log("Skipping Teams check")
+        log("=" * 60)
+        return 0
 
     # Get last check time
     last_check = get_last_check_time()
@@ -287,15 +324,16 @@ async def main_async():
     all_mentions = await check_teams_mentions()
 
     if not all_mentions:
-        log("No mentions found or error occurred")
+        log("No mentions found")
         save_check_time()
         log("Check completed")
         log("=" * 60)
         return 0
 
-    # Filter to recent (last hour)
-    recent_mentions = filter_recent_mentions(all_mentions, hours=1)
-    log(f"Found {len(recent_mentions)} mentions in last hour")
+    # Filter to recent
+    recent_mentions = filter_recent_mentions(all_mentions, hours=hours)
+    time_window = f"last {hours} hour{'s' if hours != 1 else ''}"
+    log(f"Found {len(recent_mentions)} mentions in {time_window}")
 
     # Show notification if new mentions
     if recent_mentions:
@@ -315,13 +353,14 @@ async def main_async():
             log(f"  ... and {len(recent_mentions) - 5} more")
 
         # Report to monitoring server
-        log("\nReporting to monitoring server...")
-        report_to_server(recent_mentions)
+        if args.notify:
+            log("\nReporting to monitoring server...")
+            report_to_server(recent_mentions)
     else:
         log("No new mentions")
 
         # Still report zero stats to server
-        if httpx:
+        if args.notify and httpx:
             log("\nReporting to monitoring server...")
             report_to_server([])
 
@@ -336,8 +375,18 @@ async def main_async():
 
 def main():
     """Entry point"""
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='Check Teams mentions and notify')
+    parser.add_argument('--hours', type=int, default=1,
+                        help='Check mentions from last N hours (default: 1)')
+    parser.add_argument('--notify', dest='notify', action='store_true', default=True,
+                        help='Send results to monitoring server (default)')
+    parser.add_argument('--no-notify', dest='notify', action='store_false',
+                        help='Skip sending results to monitoring server')
+    args = parser.parse_args()
+
     try:
-        return asyncio.run(main_async())
+        return asyncio.run(main_async(hours=args.hours, notify=args.notify))
     except KeyboardInterrupt:
         log("\nInterrupted by user")
         return 1

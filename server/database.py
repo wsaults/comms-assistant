@@ -39,6 +39,7 @@ class DBMention(Base):
     is_question = Column(Boolean, default=False)
     responded = Column(Boolean, default=False)
     client_id = Column(String, nullable=False, index=True)
+    workspace = Column(String, nullable=False, default="unknown", index=True)  # Slack workspace or Teams org
     created_at = Column(DateTime, default=datetime.now)
 
     # Unique constraint to prevent duplicates
@@ -108,7 +109,8 @@ def add_mention(
     text: str,
     is_question: bool,
     responded: bool,
-    client_id: str
+    client_id: str,
+    workspace: str = "unknown"
 ) -> Optional[DBMention]:
     """Add mention with deduplication"""
     try:
@@ -119,7 +121,8 @@ def add_mention(
             text=text,
             is_question=is_question,
             responded=responded,
-            client_id=client_id
+            client_id=client_id,
+            workspace=workspace
         )
         db.add(mention)
         db.commit()

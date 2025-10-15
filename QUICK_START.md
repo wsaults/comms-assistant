@@ -119,17 +119,35 @@ This will:
 3. Send mentions and stats to the server
 4. Dashboard will update in real-time!
 
-## Integration with Existing LaunchD ✅
+## Integration with LaunchD ✅
 
-**Already done!** I've updated `~/scripts/slack-assistant/check-slack-automated.sh` to use the new Python client reporter.
+The system integrates with LaunchD for automated hourly checks using Python scripts in `~/scripts/`.
 
-Now when your LaunchD automation runs hourly, it will:
-1. Use Claude Code to check Slack mentions
+When your LaunchD automation runs (configured via setup-client.sh), it will:
+1. Run `check-messages.py` to check configured platforms (Slack, Teams, etc.)
 2. Send data to the monitoring server
 3. Show updates in the dashboard in real-time
 4. Send macOS notifications for unread mentions
 
-Your existing LaunchD configuration continues to work - no changes needed!
+Key scripts:
+- `check-messages.py` - Unified checker for all platforms (mentions + channels)
+- `check-mentions-notify.py` - Slack-specific checker (single workspace)
+- `check-multi-slack.py` - Slack checker for multiple workspaces
+- `check-teams-local.py` - Teams local database checker (no API)
+- `check-teams-mentions.py` - Teams MCP-based checker
+
+LaunchD management:
+```bash
+# Check if loaded
+launchctl list | grep mentions
+
+# Load/unload
+launchctl load ~/Library/LaunchAgents/com.user.mentions-assistant.plist
+launchctl unload ~/Library/LaunchAgents/com.user.mentions-assistant.plist
+
+# Trigger manually
+launchctl start com.user.mentions-assistant
+```
 
 ## Testing Right Now
 

@@ -24,7 +24,7 @@ export MONITOR_SERVER_URL="http://localhost:8000"
 export CLIENT_ID="$(hostname)"
 
 # Run the Python script
-python3 "$HOME/scripts/slack-assistant/check-mentions-notify.py"
+python3 "$HOME/scripts/check-mentions-notify.py"
 
 # Deactivate when done
 deactivate

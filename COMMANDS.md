@@ -22,8 +22,14 @@ source venv/bin/activate && python test_client.py
 # Test with real Slack data
 source venv/bin/activate && cd client && python mention_reporter.py
 
-# Test automation script
-~/scripts/slack-assistant/check-slack-automated.sh
+# Test unified checker (all platforms + channels)
+python3 ~/scripts/check-messages.py
+
+# Test individual platform checkers
+python3 ~/scripts/check-mentions-notify.py         # Slack (single workspace)
+python3 ~/scripts/check-multi-slack.py             # Slack (multi-workspace)
+python3 ~/scripts/check-teams-mentions.py          # Teams MCP
+python3 ~/scripts/check-teams-local.py --hours 24  # Teams local DB
 ```
 
 ## 📊 Monitoring
@@ -61,13 +67,17 @@ kill $(lsof -ti:8000)
 
 ```bash
 # Check if automation is loaded
-launchctl list | grep slack-mention
+launchctl list | grep mentions
 
 # Manually trigger automation
-launchctl start com.user.slack-mention-check
+launchctl start com.user.mentions-assistant
 
 # View launchd logs
-log show --predicate 'subsystem == "com.apple.launchd"' --last 1h | grep slack
+log show --predicate 'subsystem == "com.apple.launchd"' --last 1h | grep mentions
+
+# Load/unload LaunchD agent
+launchctl load ~/Library/LaunchAgents/com.user.mentions-assistant.plist
+launchctl unload ~/Library/LaunchAgents/com.user.mentions-assistant.plist
 ```
 
 ## 📚 Documentation

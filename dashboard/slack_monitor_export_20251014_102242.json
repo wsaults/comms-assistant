@@ -1,0 +1,524 @@
+{
+  "exported_at": "2025-10-14T10:22:42.423755",
+  "mentions": [
+    {
+      "timestamp": "2025-10-14T12:00:00",
+      "channel": "test",
+      "user": "TestUser",
+      "text": "Test message",
+      "is_question": false,
+      "responded": false,
+      "client_id": "test-client",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T10:18:10.919790",
+      "channel": "sales",
+      "user": "Emma",
+      "text": "Meeting at 2pm to discuss the dashboard. @you can you join?",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Air-Home.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T10:17:04.907146",
+      "channel": "marketing",
+      "user": "Iris",
+      "text": "Thanks @you! That solved the monitoring alerts issue.",
+      "is_question": false,
+      "responded": false,
+      "client_id": "iMac-Office.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T10:14:50.238020",
+      "channel": "general",
+      "user": "Jack",
+      "text": "@you let's prioritize database migration this sprint We should also consider the API.",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Pro.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T10:03:16.878593",
+      "channel": "engineering",
+      "user": "Iris",
+      "text": "@you can we sync on the API tomorrow?",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Pro.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T10:01:00.416588",
+      "channel": "leadership",
+      "user": "Grace",
+      "text": "Reminder @you: the deployment deadline is Friday",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Pro.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:55:34.402060",
+      "channel": "sales",
+      "user": "Iris",
+      "text": "@you heads up - customer feedback is down",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Air-Home.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:54:35.695116",
+      "channel": "sales",
+      "user": "David",
+      "text": "@you should we reschedule the database migration meeting?",
+      "is_question": true,
+      "responded": false,
+      "client_id": "MacBook-Pro.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:50:34.049519",
+      "channel": "product",
+      "user": "Henry",
+      "text": "@you should we reschedule the test coverage meeting? We should also consider the deployment.",
+      "is_question": true,
+      "responded": false,
+      "client_id": "MacBook-Air-Home.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:50:18.083310",
+      "channel": "product",
+      "user": "Alice",
+      "text": "@you can we sync on user authentication tomorrow?",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Air-Home.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:48:29.052875",
+      "channel": "sales",
+      "user": "Bob",
+      "text": "@you any updates on the integration? We should also consider monitoring alerts.",
+      "is_question": true,
+      "responded": false,
+      "client_id": "iMac-Office.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:47:14.403349",
+      "channel": "general",
+      "user": "Grace",
+      "text": "Thanks @you! That solved the the release issue.",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Air-Home.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:46:05.348352",
+      "channel": "sales",
+      "user": "Jack",
+      "text": "Reminder @you: the deployment deadline is Friday",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Air-Home.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:44:27.635005",
+      "channel": "product",
+      "user": "Iris",
+      "text": "@you when can we ship the dashboard? We should also consider the bug fix.",
+      "is_question": true,
+      "responded": false,
+      "client_id": "iMac-Office.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:43:01.751535",
+      "channel": "ops",
+      "user": "Iris",
+      "text": "Did anyone see @you's update on monitoring alerts?",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Pro.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:39:10.775329",
+      "channel": "random",
+      "user": "Frank",
+      "text": "@you what do you think about the integration?",
+      "is_question": false,
+      "responded": false,
+      "client_id": "iMac-Office.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:36:31.299904",
+      "channel": "general",
+      "user": "Jack",
+      "text": "@you can we sync on the bug fix tomorrow?",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Air-Home.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:27:04.256624",
+      "channel": "general",
+      "user": "Alice",
+      "text": "@you great work on the new feature!",
+      "is_question": false,
+      "responded": false,
+      "client_id": "iMac-Office.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:23:51.208314",
+      "channel": "sales",
+      "user": "Bob",
+      "text": "@you great work on user authentication!",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Pro.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:20:15.903657",
+      "channel": "design",
+      "user": "Grace",
+      "text": "@you let's prioritize monitoring alerts this sprint We should also consider performance issues.",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Pro.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:12:08.750370",
+      "channel": "engineering",
+      "user": "Jack",
+      "text": "@you any updates on the bug fix?",
+      "is_question": true,
+      "responded": false,
+      "client_id": "MacBook-Air-Home.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:08:24.727850",
+      "channel": "random",
+      "user": "Bob",
+      "text": "@you the client is asking about user authentication We should also consider code review.",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Pro.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:07:49.545587",
+      "channel": "marketing",
+      "user": "Emma",
+      "text": "FYI @you - shipped customer feedback to production",
+      "is_question": false,
+      "responded": false,
+      "client_id": "iMac-Office.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:06:12.885315",
+      "channel": "support",
+      "user": "David",
+      "text": "@you is documentation ready for prod?",
+      "is_question": true,
+      "responded": false,
+      "client_id": "iMac-Office.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:05:48.928271",
+      "channel": "support",
+      "user": "Carol",
+      "text": "Reminder @you: the new feature deadline is Friday",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Air-Home.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:05:09.700453",
+      "channel": "marketing",
+      "user": "Henry",
+      "text": "@you the client is asking about performance issues",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Air-Home.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:04:42.069724",
+      "channel": "design",
+      "user": "Bob",
+      "text": "Reminder @you: monitoring alerts deadline is Friday",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Air-Home.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T09:02:11.683184",
+      "channel": "marketing",
+      "user": "Alice",
+      "text": "@you heads up - performance issues is down",
+      "is_question": false,
+      "responded": false,
+      "client_id": "iMac-Office.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:56:25.862496",
+      "channel": "marketing",
+      "user": "Jack",
+      "text": "@you can you review this PR?",
+      "is_question": true,
+      "responded": false,
+      "client_id": "MacBook-Pro.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:54:52.115190",
+      "channel": "design",
+      "user": "Bob",
+      "text": "@you can we sync on the deployment tomorrow?",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Air-Home.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:50:41.055596",
+      "channel": "marketing",
+      "user": "Emma",
+      "text": "@you can we sync on the bug fix tomorrow?",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Air-Home.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:43:16.612689",
+      "channel": "leadership",
+      "user": "Bob",
+      "text": "@you quick question about the API",
+      "is_question": false,
+      "responded": false,
+      "client_id": "iMac-Office.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:42:03.560213",
+      "channel": "design",
+      "user": "Emma",
+      "text": "@you great work on the release!",
+      "is_question": false,
+      "responded": false,
+      "client_id": "iMac-Office.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:36:27.355266",
+      "channel": "ops",
+      "user": "Grace",
+      "text": "@you when can we ship the deployment?",
+      "is_question": true,
+      "responded": false,
+      "client_id": "MacBook-Pro.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:35:55.232249",
+      "channel": "leadership",
+      "user": "Alice",
+      "text": "@you can we sync on the integration tomorrow? We should also consider performance issues.",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Air-Home.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:35:32.154686",
+      "channel": "support",
+      "user": "Iris",
+      "text": "Reminder @you: the new feature deadline is Friday We should also consider the deployment.",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Pro.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:32:09.072645",
+      "channel": "support",
+      "user": "Alice",
+      "text": "@you when can we ship performance issues?",
+      "is_question": true,
+      "responded": false,
+      "client_id": "MacBook-Pro.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:32:01.286096",
+      "channel": "engineering",
+      "user": "Grace",
+      "text": "@you quick question about user authentication We should also consider the deployment.",
+      "is_question": false,
+      "responded": false,
+      "client_id": "iMac-Office.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:29:54.748476",
+      "channel": "ops",
+      "user": "Henry",
+      "text": "Thanks @you! That solved the test coverage issue.",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Air-Home.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:28:13.698043",
+      "channel": "sales",
+      "user": "Iris",
+      "text": "Did anyone see @you's update on test coverage?",
+      "is_question": false,
+      "responded": false,
+      "client_id": "iMac-Office.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:25:06.185207",
+      "channel": "ops",
+      "user": "Grace",
+      "text": "FYI @you - shipped the integration to production",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Pro.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:22:53.236941",
+      "channel": "general",
+      "user": "Alice",
+      "text": "@you any updates on user authentication?",
+      "is_question": true,
+      "responded": false,
+      "client_id": "iMac-Office.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:22:25.273812",
+      "channel": "leadership",
+      "user": "Frank",
+      "text": "@you how should we handle documentation?",
+      "is_question": true,
+      "responded": false,
+      "client_id": "iMac-Office.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:21:17.121377",
+      "channel": "leadership",
+      "user": "Jack",
+      "text": "@you let's prioritize database migration this sprint",
+      "is_question": false,
+      "responded": false,
+      "client_id": "iMac-Office.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:18:48.603041",
+      "channel": "support",
+      "user": "David",
+      "text": "@you great work on the integration!",
+      "is_question": false,
+      "responded": true,
+      "client_id": "MacBook-Pro.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:16:38.326095",
+      "channel": "product",
+      "user": "Bob",
+      "text": "Thanks @you! That solved the the new feature issue. We should also consider performance issues.",
+      "is_question": false,
+      "responded": true,
+      "client_id": "MacBook-Pro.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:14:43.435612",
+      "channel": "product",
+      "user": "Alice",
+      "text": "@you when can we ship user authentication?",
+      "is_question": true,
+      "responded": false,
+      "client_id": "MacBook-Pro.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:11:34.464526",
+      "channel": "leadership",
+      "user": "Frank",
+      "text": "@you can we sync on the API tomorrow?",
+      "is_question": false,
+      "responded": false,
+      "client_id": "MacBook-Air-Home.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:08:24.858920",
+      "channel": "leadership",
+      "user": "Grace",
+      "text": "FYI @you - shipped performance issues to production",
+      "is_question": false,
+      "responded": true,
+      "client_id": "MacBook-Air-Home.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:05:41.691122",
+      "channel": "design",
+      "user": "Frank",
+      "text": "Breaking: documentation just launched! cc @you",
+      "is_question": false,
+      "responded": false,
+      "client_id": "iMac-Office.local",
+      "workspace": "unknown"
+    },
+    {
+      "timestamp": "2025-10-14T08:05:39.308405",
+      "channel": "random",
+      "user": "Bob",
+      "text": "Reminder @you: performance issues deadline is Friday",
+      "is_question": false,
+      "responded": true,
+      "client_id": "MacBook-Air-Home.local",
+      "workspace": "unknown"
+    }
+  ],
+  "stats": {},
+  "active_clients": [
+    "MacBook-Pro.local",
+    "iMac-Office.local",
+    "MacBook-Air-Home.local",
+    "Job1-Company-A",
+    "Job2-Company-B",
+    "Job3-Freelance"
+  ]
+}

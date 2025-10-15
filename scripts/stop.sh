@@ -3,7 +3,9 @@
 # Slack Monitor Stop Script
 # Cleanly shuts down the monitoring server
 
-PROJECT_DIR="/Users/will/Projects/Saults/slack-mentions-assistant"
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_DIR"
 
 # Colors for output

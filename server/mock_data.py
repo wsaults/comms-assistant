@@ -103,6 +103,7 @@ class MockMention(BaseModel):
     is_question: bool
     responded: bool
     client_id: str
+    workspace: str = "Acme Corp"  # Default workspace name
 
 
 class MockStats(BaseModel):
@@ -191,7 +192,8 @@ def generate_mock_mentions(
             text=text,
             is_question=is_question,
             responded=responded,
-            client_id=client
+            client_id=client,
+            workspace="Acme Corp"  # Default workspace
         )
         mentions.append(mention)
 
@@ -310,7 +312,8 @@ def generate_high_activity_scenario() -> Dict:
             text=text,
             is_question=is_question,
             responded=False,  # All unread
-            client_id=random.choice(clients)
+            client_id=random.choice(clients),
+            workspace="Acme Corp"
         )
         mentions.append(mention)
 
@@ -387,7 +390,8 @@ def generate_multi_job_scenario() -> Dict:
                 ),
                 is_question=random.random() < 0.3,
                 responded=hours_ago > 3,  # Older messages responded
-                client_id=client_id
+                client_id=client_id,
+                workspace=workspace["name"]  # Use workspace name
             )
             all_mentions.append(mention)
 

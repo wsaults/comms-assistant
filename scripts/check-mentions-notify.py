@@ -238,56 +238,6 @@ def clean_slack_mentions(text):
     return text
 
 
-def get_username(client, user_id, cache=None):
-    """Get username from user ID using Slack API
-
-    Args:
-        client: Slack WebClient
-        user_id: User ID to lookup
-        cache: Dictionary for caching user ID -> username mappings
-
-    Returns:
-        Username string (display name, real name, or @handle)
-    """
-    if cache is None:
-        cache = {}
-
-    # Check cache first
-    if user_id in cache:
-        return cache[user_id]
-
-    # Handle special cases
-    if not user_id or user_id == "unknown":
-        return "unknown"
-
-    try:
-        # Call Slack users.info API
-        response = client.users_info(user=user_id)
-        user_info = response.get("user", {})
-        profile = user_info.get("profile", {})
-
-        # Priority: display_name > real_name > name
-        username = (
-            profile.get("display_name") or
-            profile.get("real_name") or
-            user_info.get("name") or
-            user_id
-        )
-
-        # Cache the result
-        cache[user_id] = username
-        return username
-
-    except SlackApiError as e:
-        # Handle deleted users, deactivated accounts, etc.
-        log(f"  Warning: Could not get username for {user_id}: {e.response.get('error', 'unknown error')}")
-        cache[user_id] = user_id  # Cache the ID to avoid repeated failures
-        return user_id
-    except Exception as e:
-        log(f"  Warning: Unexpected error getting username for {user_id}: {e}")
-        return user_id
-
-
 def report_to_server(mentions, all_mentions, workspace_name="Slack"):
     """Send mention data to monitoring server"""
     if not httpx:
@@ -354,20 +304,13 @@ def report_to_server(mentions, all_mentions, workspace_name="Slack"):
         return False
 
 
-def report_channel_messages(slack_client, messages, workspace_name="Slack"):
-    """Send channel messages to monitoring server
-
-    Args:
-        slack_client: Slack WebClient for username lookups
-        messages: List of channel messages to report
-        workspace_name: Name of the Slack workspace
-    """
+def report_channel_messages(messages, workspace_name="Slack"):
+    """Send channel messages to monitoring server"""
     if not httpx or not messages:
         return False
 
     try:
-        http_client = httpx.Client(timeout=10.0)
-        username_cache = {}  # Cache for user ID -> username lookups
+        client = httpx.Client(timeout=10.0)
 
         # Report each channel message
         for msg in messages:
@@ -375,9 +318,10 @@ def report_channel_messages(slack_client, messages, workspace_name="Slack"):
             raw_text = msg.get("text", "")
             clean_text = clean_slack_mentions(raw_text)
 
-            # Get user ID and resolve to username
-            user_id = msg.get("user", "unknown")
-            username = get_username(slack_client, user_id, username_cache)
+            # Get user info from message
+            user = msg.get("user", "unknown")
+            # Try to get username if available
+            username = msg.get("username", user)
 
             mention_data = {
                 "timestamp": timestamp.isoformat(),
@@ -392,7 +336,7 @@ def report_channel_messages(slack_client, messages, workspace_name="Slack"):
             }
 
             try:
-                response = http_client.post(
+                response = client.post(
                     f"{MONITOR_SERVER}/api/mention",
                     json=mention_data
                 )
@@ -401,7 +345,7 @@ def report_channel_messages(slack_client, messages, workspace_name="Slack"):
             except Exception as e:
                 log(f"  ✗ Failed to report channel message: {e}")
 
-        http_client.close()
+        client.close()
         return True
 
     except Exception as e:
@@ -414,6 +358,10 @@ def main():
     parser = argparse.ArgumentParser(description='Check Slack mentions and notify')
     parser.add_argument('--hours', type=int, default=1,
                         help='Check mentions from last N hours (default: 1)')
+    parser.add_argument('--notify', dest='notify', action='store_true', default=True,
+                        help='Send results to monitoring server (default)')
+    parser.add_argument('--no-notify', dest='notify', action='store_false',
+                        help='Skip sending results to monitoring server')
     args = parser.parse_args()
 
     log("=" * 60)
@@ -476,13 +424,14 @@ def main():
             log(f"  ... and {len(recent_mentions) - 5} more")
 
         # Report to monitoring server
-        log("\nReporting to monitoring server...")
-        report_to_server(recent_mentions, all_mentions, workspace_name)
+        if args.notify:
+            log("\nReporting to monitoring server...")
+            report_to_server(recent_mentions, all_mentions, workspace_name)
     else:
         log("No new mentions")
 
         # Still report zero stats to server
-        if httpx:
+        if args.notify and httpx:
             log("\nReporting to monitoring server...")
             report_to_server([], all_mentions, workspace_name)
 
@@ -515,8 +464,9 @@ def main():
             )
 
             # Report to monitoring server
-            log(f"\nReporting {count} channel message(s) to monitoring server...")
-            report_channel_messages(client, all_channel_messages, workspace_name)
+            if args.notify:
+                log(f"\nReporting {count} channel message(s) to monitoring server...")
+                report_channel_messages(all_channel_messages, workspace_name)
 
     # Save check time
     save_check_time()

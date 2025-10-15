@@ -8,7 +8,7 @@ set -e
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$SCRIPT_DIR"
-INSTALL_DIR="$HOME/scripts/slack-assistant"
+INSTALL_DIR="$HOME/scripts"
 MCP_CONFIG="$HOME/.claude/mcp-servers.json"
 
 # Colors
@@ -62,7 +62,7 @@ mkdir -p "$INSTALL_DIR"
 
 # Copy scripts
 echo -e "${YELLOW}→ Copying client files...${NC}"
-for file in "$PROJECT_DIR"/scripts/slack-assistant/*.py "$PROJECT_DIR"/scripts/slack-assistant/*.sh; do
+for file in "$PROJECT_DIR"/scripts/*.py "$PROJECT_DIR"/scripts/*.sh; do
     if [ -f "$file" ]; then
         cp "$file" "$INSTALL_DIR/"
     fi
@@ -212,7 +212,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     <key>ProgramArguments</key>
     <array>
         <string>/usr/bin/python3</string>
-        <string>$HOME/scripts/slack-assistant/check-teams-mentions.py</string>
+        <string>$HOME/scripts/check-teams-mentions.py</string>
     </array>
 
     <!-- Run every hour during work hours (8 AM - 7 PM) -->
